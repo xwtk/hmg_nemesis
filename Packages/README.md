@@ -21,4 +21,5 @@ Download a zip file and extract it to the root of an exFAT or FAT32 formatted US
 - Does **not** include wireless ADB. USB ADB is unaffected.
 - Does **not** include Android Auto car data (battery, range, outside temperature): that is EV-specific and stays a separate add-on. If you add it on top, uninstall it before uninstalling or updating this package.
 - Supports the KIA EV6 and the Hyundai Ioniq 5 on 260507 firmware; the installer picks the right build from the firmware's product id. On any other car or firmware it stops before writing anything.
+- If the head unit is not recognised (unknown model, or stock files with unexpected checksums), the install stops, shows an on-screen message and saves a read-only report to the USB drive (`NEMESIS-report-wireless.carplay.aa`: firmware info, checksums, install logs and copies of the stock files the package checks). Sharing that folder is how support for more head units gets added.
 - Android Auto phone calls still use Bluetooth (that is how Android Auto works); music, maps and Assistant go over Wi-Fi. CarPlay sends everything over Wi-Fi.
