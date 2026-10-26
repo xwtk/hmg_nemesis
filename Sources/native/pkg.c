@@ -494,6 +494,126 @@ static int uninstall_tree(const char *id, int allow_locked) {
     return 0;
 }
 
+/*
+ * depends= in [nemesis]: ids separated by commas or spaces, each optionally
+ * pinned to a minimum version, e.g. "media.codecs>=2.0, adb.wifi".
+ */
+
+static int installed_version(const char *id, char *out, size_t cap) {
+    char meta[MAX_PATH];
+    ini_file ini;
+    const char *v;
+    out[0] = 0;
+    snprintf(meta, sizeof(meta), "%s/%s/NEMESIS.data", NEMESIS_APPS, id);
+    if (!is_file(meta) || ini_load(&ini, meta) != 0) return -1;
+    v = ini_get(&ini, "nemesis", "version");
+    snprintf(out, cap, "%s", v ? v : "");
+    ini_free(&ini);
+    return 0;
+}
+
+/* Dot-separated numbers: 1.10 > 1.9, 2 == 2.0. A suffix like "-rc1" is ignored. */
+static int ver_cmp(const char *a, const char *b) {
+    while (*a || *b) {
+        char *ea, *eb;
+        long x = strtol(a, &ea, 10);
+        long y = strtol(b, &eb, 10);
+        if (x != y) return x < y ? -1 : 1;
+        for (a = ea; *a && *a != '.'; a++) {}
+        for (b = eb; *b && *b != '.'; b++) {}
+        if (*a) a++;
+        if (*b) b++;
+    }
+    return 0;
+}
+
+/* 1 = one entry read, 0 = end of list, -1 = malformed. */
+static int dep_next(const char **pp, char *id, size_t idcap, char *ver, size_t vcap) {
+    const char *p = *pp, *start;
+    char tok[MAX_ID + 64];
+    char *ge;
+    size_t n;
+    while (*p == ',' || *p == ' ' || *p == '\t') p++;
+    if (!*p) return 0;
+    start = p;
+    while (*p && *p != ',' && *p != ' ' && *p != '\t') p++;
+    *pp = p;
+    n = (size_t)(p - start);
+    if (n >= sizeof(tok)) return -1;
+    memcpy(tok, start, n);
+    tok[n] = 0;
+    ver[0] = 0;
+    ge = strstr(tok, ">=");
+    if (ge) {
+        *ge = 0;
+        snprintf(ver, vcap, "%s", ge + 2);
+        if (!ver[0]) return -1;
+    }
+    if (!pkg_id_ok(tok)) return -1;
+    snprintf(id, idcap, "%s", tok);
+    return 1;
+}
+
+static int check_depends(const ini_file *ini, const char *self) {
+    const char *list = ini_get(ini, "nemesis", "depends");
+    char dep[MAX_ID], want[64], have[64];
+    int r, bad = 0;
+    if (!list) return 0;
+    while ((r = dep_next(&list, dep, sizeof(dep), want, sizeof(want))) != 0) {
+        if (r < 0) {
+            fprintf(stderr, "invalid depends= in NEMESIS.data\n");
+            return 1;
+        }
+        if (!strcmp(dep, self)) continue;
+        if (pkg_find(dep, NULL) != 0) {
+            if (want[0]) fprintf(stderr, "%s needs %s %s or newer installed first\n", self, dep, want);
+            else fprintf(stderr, "%s needs %s installed first\n", self, dep);
+            bad = 1;
+        } else if (want[0] && (installed_version(dep, have, sizeof(have)) != 0 ||
+                               ver_cmp(have, want) < 0)) {
+            fprintf(stderr, "%s needs %s %s or newer (installed: %s)\n", self, dep, want,
+                    have[0] ? have : "unknown");
+            bad = 1;
+        }
+    }
+    return bad ? 4 : 0;
+}
+
+/*
+ * Installed packages that depend on id. For an uninstall (new_ver NULL) any
+ * dependent blocks it. For an update, only one whose minimum version the new
+ * version no longer meets.
+ */
+static int check_dependents(const char *id, const char *new_ver) {
+    pkg_rec *list = NULL;
+    int n = 0, i, bad = 0;
+    pkg_list_load(&list, &n);
+    for (i = 0; i < n; i++) {
+        char meta[MAX_PATH], dep[MAX_ID], want[64];
+        const char *deps;
+        ini_file ini;
+        if (!strcmp(list[i].id, id)) continue;
+        snprintf(meta, sizeof(meta), "%s/%s/NEMESIS.data", NEMESIS_APPS, list[i].id);
+        if (!is_file(meta) || ini_load(&ini, meta) != 0) continue;
+        deps = ini_get(&ini, "nemesis", "depends");
+        while (deps && dep_next(&deps, dep, sizeof(dep), want, sizeof(want)) > 0) {
+            if (strcmp(dep, id)) continue;
+            if (!new_ver) {
+                fprintf(stderr, "%s is needed by %s; uninstall that first\n", id, list[i].id);
+                bad = 1;
+            } else if (want[0] && ver_cmp(new_ver, want) < 0) {
+                fprintf(stderr, "%s needs %s %s or newer; this is %s\n",
+                        list[i].id, id, want, new_ver[0] ? new_ver : "unversioned");
+                bad = 1;
+            }
+            break;
+        }
+        ini_free(&ini);
+    }
+    free(list);
+    return bad ? 4 : 0;
+}
+
 static int do_fresh_install(const char *stage, ini_file *ini,
                             const char *id, const char *name, const char *types, int locked) {
     char dest[MAX_PATH];
@@ -612,6 +732,15 @@ int cmd_install(int argc, char **argv) {
         ini_free(&ini);
         return 3;
     }
+    i = check_depends(&ini, id);
+    if (i == 0 && have_existing) {
+        const char *v = ini_get(&ini, "nemesis", "version");
+        i = check_dependents(id, v ? v : "");
+    }
+    if (i != 0) {
+        ini_free(&ini);
+        return i;
+    }
     snprintf(stage, sizeof(stage), "%s/stage/%s", NEMESIS_TMP, id);
     snprintf(stage_top, sizeof(stage_top), "%s", stage);
     rm_rf(stage);
@@ -664,6 +793,8 @@ int cmd_uninstall(const char *id, int allow_locked) {
         return 1;
     }
     ensure_dirs();
+    /* wipe goes straight to uninstall_tree and removes everything regardless. */
+    if (pkg_find(id, NULL) == 0 && check_dependents(id, NULL) != 0) return 4;
     return uninstall_tree(id, allow_locked);
 }
 

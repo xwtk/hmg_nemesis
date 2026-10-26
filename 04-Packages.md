@@ -32,12 +32,25 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `name` | recommended | Display name (defaults to `id`) |
 | `version` | recommended | Free-form version string |
 | `types` | recommended | Comma list, e.g. `application,service` (shown in `pkg-list`) |
+| `depends` | no | Packages that must be installed first: ids separated by commas, each optionally `id>=version`. See below. |
 | `preinstall` | no | Script run **before** the tree is copied, cwd = staging dir |
 | `postinstall` | no | Script run **after** copy, APK install, and service register; cwd = `/data/nemesis/apps/<id>` |
 | `preuninstall` | no | Script run after services are stopped, before APKs/`rm` |
 | `postuninstall` | no | Copied to tmp then run so it still exists after the tree is deleted |
 
 All listed scripts run as **root** (or `system` if you set `uid=system` on a service; hooks themselves use root).
+
+### Dependencies
+
+```ini
+depends=media.codecs>=2.0, adb.wifi
+```
+
+- **Install** (including `--update`) is refused with exit code 4 while any listed package is missing, or older than its `>=` version. Versions compare as dot-separated numbers (`1.10` is newer than `1.9`, and a suffix such as `-rc1` is ignored). Write `id>=version` without spaces.
+- **Uninstall** of a package is refused (exit 4) while another installed package lists it. Uninstall the dependent first. `wipe` still removes everything.
+- **Updating** a package to a version that an installed dependent's `>=` no longer accepts is refused too.
+
+The checks run before any hook, so `preinstall` never sees a missing dependency. The reason is printed on stderr and shown by the Manager on uninstall. A refused USB install shows the usual failure dialog, and the reason is in `nemesis log service usb-handler/usb-handler`.
 
 ---
 

@@ -215,13 +215,16 @@ public class DialogActivity extends Activity {
         final String id = targetId;
         new Thread(new Runnable() {
             public void run() {
-                final int rc = id == null ? 1 : Cli.runRc("uninstall", id);
+                final Cli.Result r = id == null ? null : Cli.exec("uninstall", id);
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (isFinishing()) return;
+                        boolean ok = r != null && r.rc == 0;
                         Intent i = new Intent(getIntent());
-                        i.putExtra("nemesis_mode", rc == 0 ? "result_ok" : "result_fail");
+                        i.putExtra("nemesis_mode", ok ? "result_ok" : "result_fail");
                         i.removeExtra("nemesis_message");
+                        if (!ok && r != null && r.out.trim().length() > 0)
+                            i.putExtra("nemesis_message", r.out.trim());
                         bind(i);
                     }
                 });
