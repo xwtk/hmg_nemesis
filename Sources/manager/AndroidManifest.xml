@@ -6,6 +6,9 @@
     <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="19" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- HMG's ActivityManager checks GET_TASKS in finishActivity(); without it the
+         dialog crashes when Yes is tapped (the reply is already written). -->
+    <uses-permission android:name="android.permission.GET_TASKS" />
     <!-- Gates DialogActivity: usb-handler starts it as root, other apps cannot. -->
     <permission
         android:name="com.nemesis.manager.permission.DIALOG"
