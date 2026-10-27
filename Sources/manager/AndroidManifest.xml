@@ -4,6 +4,9 @@
     android:versionCode="16"
     android:versionName="1.15">
     <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="19" />
+    <!-- HMG's ActivityManager checks GET_TASKS in finishActivity(); without it the
+         dialog crashes when Yes is tapped (the reply is already written). -->
+    <uses-permission android:name="android.permission.GET_TASKS" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
