@@ -929,6 +929,7 @@ int cmd_wipe(int confirm) {
     unlink(BIN_PATH);
     rm_rf(NEMESIS_ROOT);
     rm_rf(NEMESIS_TMP);
+    rm_rf(NEMESIS_TMP_LEGACY);
     purge_manager_dalvik();
     if (path_exists(BIN_PATH) || path_exists(MANAGER_APK) || path_exists(INSTALL_RECOVERY)) {
         log_msg("wipe incomplete: system files still present");

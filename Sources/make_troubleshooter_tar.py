@@ -55,7 +55,7 @@ extract_blob() {{
     rm -f "$_tmp"
 }}
 
-mkdir -p /data/nemesis /data/nemesis/apps /data/local/tmp/nemesis
+mkdir -p /data/nemesis /data/nemesis/apps /data/nemesis/tmp
 
 am start -n {ENG_PKG}/.EngineeringModeMainActivity >/dev/null 2>&1 || true
 sleep 1

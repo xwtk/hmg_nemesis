@@ -39,7 +39,7 @@ int log_msg(const char *fmt, ...) {
     fputs(line, stderr);
     mkdir_p(NEMESIS_ROOT, 0755);
     append_file(NEMESIS_LOGFILE, line);
-    chmod(NEMESIS_LOGFILE, 0666);
+    chmod(NEMESIS_LOGFILE, 0644);
     return 0;
 }
 
@@ -106,13 +106,18 @@ int ensure_dirs(void) {
     mkdir_p(PIDS_DIR, 0755);
     mkdir_p(SESSION_DIR, 0755);
     mkdir_p(NEMESIS_BINDIR, 0755);
-    chmod(NEMESIS_TMP, 0777);
-    chmod(NEMESIS_LOGS, 0777);
-    chmod(SESSION_DIR, 0777);
+    /* The installer pre-creates these as root with umask 0 (0777); package
+     * hooks under apps/ run as root, so they must not stay world-writable. */
+    chmod(NEMESIS_APPS, 0755);
+    chmod(NEMESIS_TMP, 0711);
+    chmod(NEMESIS_LOGS, 0755);
+    /* Package hooks (e.g. Leafia) put bin/ first in PATH while running as root. */
+    chmod(NEMESIS_BINDIR, 0755);
+    secure_session_dir();
     chmod(NEMESIS_ROOT, 0755);
     chmod(PACKAGES_DB, 0644);
     chmod(SERVICES_DB, 0644);
-    chmod(NEMESIS_LOGFILE, 0666);
+    chmod(NEMESIS_LOGFILE, 0644);
     chmod(BIN_PATH, 04755);
     install_mount_wrap();
     return 0;
@@ -639,6 +644,45 @@ int framework_up(void) {
     /* libc property lookup; no fork, so USB Handler cannot stall on getprop. */
     if (__system_property_get("sys.boot_completed", v) <= 0) return 0;
     return v[0] == '1';
+}
+
+/* Manager uid, only while the stock /system APK is present: PackageManager then
+ * refuses any com.nemesis.manager (including a /data/app update) that is not
+ * signed with the same key, so a look-alike app never gets this uid. */
+int manager_uid(uid_t *out) {
+    FILE *f;
+    char line[4096];
+    int rc = -1;
+    if (!path_exists(MANAGER_APK)) return -1;
+    f = fopen(PACKAGES_XML, "r");
+    if (!f) return -1;
+    while (fgets(line, sizeof(line), f)) {
+        char *p = strstr(line, "<package name=\"" MANAGER_PKG "\"");
+        char *u;
+        long v;
+        if (!p) continue;
+        u = strstr(p, " userId=\"");
+        if (!u) break;
+        v = strtol(u + 9, NULL, 10);
+        if (v >= 10000) {
+            *out = (uid_t)v;
+            rc = 0;
+        }
+        break;
+    }
+    fclose(f);
+    return rc;
+}
+
+/* Only the Manager answers USB prompts; anyone else writing reply is a forgery. */
+void secure_session_dir(void) {
+    uid_t mgr;
+    mkdir_p(SESSION_DIR, 0700);
+    if (manager_uid(&mgr) == 0)
+        chown(SESSION_DIR, mgr, mgr);
+    else
+        chown(SESSION_DIR, 0, 0);
+    chmod(SESSION_DIR, 0700);
 }
 
 void qname_join(char *out, size_t cap, const char *id, const char *local) {

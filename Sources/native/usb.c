@@ -235,7 +235,7 @@ static int am_dialog(const char *mode, const char *path, const char *id, const c
     sanitize_extra(pidv);
     sanitize_extra(nm);
     log_msg("usb prompt %s", m);
-    chmod(SESSION_DIR, 0777);
+    secure_session_dir();
     argv[n++] = (char *)"am";
     argv[n++] = (char *)"start";
     argv[n++] = (char *)"-n";
@@ -451,7 +451,6 @@ int cmd_usb_handler(void) {
         char meta[MAX_PATH];
         usb_ident cur;
         int mounted = usb0_mounted();
-        chmod(SESSION_DIR, 0777);
         if (!mounted) {
             if (handled) log_msg("usb-handler rearm (unmounted)");
             handled = 0;
@@ -486,8 +485,7 @@ int cmd_usb_handler(void) {
             const char *type, *rel, *root;
             int is_exec, is_inst, is_open;
             reply[0] = 0;
-            mkdir_p(SESSION_DIR, 0755);
-            chmod(SESSION_DIR, 0777);
+            secure_session_dir();
             if (ini_load(&ini, meta) != 0) {
                 usb_notify("invalid", meta, "", "", reply, sizeof(reply));
                 handled = 1;

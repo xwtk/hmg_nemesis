@@ -23,7 +23,7 @@ On-disk data:
 |------|------------------|-----|
 | `/data/nemesis/` | Yes | Packages, `packages.db`, `services.db`, socket, logs, pidfiles, USB session reply |
 | `/data/nemesis/apps/*` | Yes | Unpacked package trees |
-| `/data/local/tmp/nemesis/` | **No** (cleared on reboot) | Staging for zip extract / uninstall hooks only. Recreated when needed. |
+| `/data/nemesis/tmp/` | Yes | Staging for zip extract / uninstall hooks only (`0711`, root). Moved out of shell-writable `/data/local/tmp`. |
 
 Stock applications, the launcher, and Engineering Mode are not modified.
 
