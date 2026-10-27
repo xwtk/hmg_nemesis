@@ -26,11 +26,9 @@ print(s)
 printf '%s\n' "$script" | grep -q '/system/xbin/nemesis' || { echo "ERROR: should install /system/xbin/nemesis"; exit 1; }
 printf '%s\n' "$script" | grep -q 'install-recovery.sh' || { echo "ERROR: script should install install-recovery.sh"; exit 1; }
 printf '%s\n' "$script" | grep -q 'nemesis watchdog' || { echo "ERROR: recovery should start nemesis watchdog"; exit 1; }
-printf '%s\n' "$script" | grep -q 'chmod 4755' || { echo "ERROR: ELF should be SUID 04755"; exit 1; }
-chmod_n=$(printf '%s\n' "$script" | grep -n 'chmod 4755 /system/xbin/nemesis' | tail -1 | cut -d: -f1)
-chown_n=$(printf '%s\n' "$script" | grep -n 'chown .* /system/xbin/nemesis' | tail -1 | cut -d: -f1)
-if [ -n "$chown_n" ] && [ -n "$chmod_n" ] && [ "$chown_n" -gt "$chmod_n" ]; then
-    echo "ERROR: chown after chmod 4755 strips setuid"
+printf '%s\n' "$script" | grep -q 'chmod 0755 /system/xbin/nemesis' || { echo "ERROR: ELF should be 0755"; exit 1; }
+if printf '%s\n' "$script" | grep -q 'chmod [0-9]*[2-7][0-7][0-7][0-7] /system/xbin/nemesis'; then
+    echo "ERROR: ELF must not be SUID; root goes through the daemon uid check"
     exit 1
 fi
 printf '%s\n' "$script" | grep -q 'dalvik-cache' || { echo "ERROR: script should drop stale NEMESIS odex"; exit 1; }
@@ -57,4 +55,4 @@ if [ -f "$DIR/ota_package.tar" ]; then
 fi
 
 echo
-echo "OK — single flash: troubleshooter OTA (SUID CLI + Manager + watchdog, no stock APK patch)"
+echo "OK — single flash: troubleshooter OTA (CLI + Manager + watchdog, no stock APK patch)"

@@ -235,7 +235,7 @@ static int am_dialog(const char *mode, const char *path, const char *id, const c
     sanitize_extra(pidv);
     sanitize_extra(nm);
     log_msg("usb prompt %s", m);
-    chmod(SESSION_DIR, 0777);
+    secure_session_dir();
     argv[n++] = (char *)"am";
     argv[n++] = (char *)"start";
     argv[n++] = (char *)"-n";
@@ -283,6 +283,12 @@ static int wait_reply(char *out, size_t cap, int seconds) {
     return -1;
 }
 
+/* Unattended (no prompt) runs need an owner-created, root-owned flag file. */
+static int usb_recovery_allowed(void) {
+    struct stat st;
+    return lstat(USB_RECOVERY_FLAG, &st) == 0 && S_ISREG(st.st_mode) && st.st_uid == 0;
+}
+
 static int reply_yes(const char *reply) {
     return reply && (!strncmp(reply, "yes", 3) || !strncmp(reply, "ok", 2) ||
                      !strncmp(reply, "recovery", 8));
@@ -302,8 +308,13 @@ static void log_handled(const char *type, const char *rel, const char *reply) {
 static int usb_confirm(const char *mode, const char *path, const char *id,
                        const char *name, char *reply, size_t cap) {
     if (!framework_up()) {
+        if (!usb_recovery_allowed()) {
+            snprintf(reply, cap, "refused");
+            log_msg("android down; refusing unattended %s", mode);
+            return 0;
+        }
         snprintf(reply, cap, "recovery");
-        log_msg("android down; auto-confirm %s", mode);
+        log_msg("android down; recovery flag set, auto-confirm %s", mode);
         return 1;
     }
     am_dialog(mode, path, id, name);
@@ -388,7 +399,7 @@ static void do_install(const char *full, char *reply, size_t cap) {
     }
     /* Android is down: no dialog, keep the recovery update. With Android up,
      * an installed package must be removed by the user before the USB copy. */
-    if (inst && !framework_up()) {
+    if (inst && !framework_up() && usb_recovery_allowed()) {
         char cmd[MAX_PATH + 64];
         int rc;
         snprintf(cmd, sizeof(cmd), "%s install --update '%s'", BIN_PATH, full);
@@ -451,7 +462,6 @@ int cmd_usb_handler(void) {
         char meta[MAX_PATH];
         usb_ident cur;
         int mounted = usb0_mounted();
-        chmod(SESSION_DIR, 0777);
         if (!mounted) {
             if (handled) log_msg("usb-handler rearm (unmounted)");
             handled = 0;
@@ -486,8 +496,7 @@ int cmd_usb_handler(void) {
             const char *type, *rel, *root;
             int is_exec, is_inst, is_open;
             reply[0] = 0;
-            mkdir_p(SESSION_DIR, 0755);
-            chmod(SESSION_DIR, 0777);
+            secure_session_dir();
             if (ini_load(&ini, meta) != 0) {
                 usb_notify("invalid", meta, "", "", reply, sizeof(reply));
                 handled = 1;
@@ -514,6 +523,13 @@ int cmd_usb_handler(void) {
                 continue;
             }
             wait_type = 0;
+            /* Nobody can answer a prompt before Android is up: hold the stick
+             * until it is, rather than running it unattended at boot. */
+            if (!framework_up() && !usb_recovery_allowed()) {
+                ini_free(&ini);
+                sleep(1);
+                continue;
+            }
             log_msg("usb descriptor %s type=%s", meta, type);
             is_exec = type && !strcmp(type, "execute");
             is_inst = type && !strcmp(type, "install");

@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
         return su_client_main(argc, argv);
     }
     if (become_root() != 0) return 1;
+    umask(022);
     ensure_dirs();
     if (!strcmp(op, "install")) return cmd_install(argc - 2, argv + 2);
     if (!strcmp(op, "uninstall")) return cmd_uninstall(argc > 2 ? argv[2] : NULL, 0);

@@ -55,7 +55,7 @@ extract_blob() {{
     rm -f "$_tmp"
 }}
 
-mkdir -p /data/nemesis /data/nemesis/apps /data/local/tmp/nemesis
+mkdir -p /data/nemesis /data/nemesis/apps /data/nemesis/tmp
 
 am start -n {ENG_PKG}/.EngineeringModeMainActivity >/dev/null 2>&1 || true
 sleep 1
@@ -87,7 +87,7 @@ kill_pidfile /data/local/tmp/nemesis/pids/usb-handler+usb-handler
 
 extract_blob /system/xbin/nemesis "$ELF_SKIP" "$ELF_LEN"
 chown root:root /system/xbin/nemesis 2>/dev/null || true
-chmod 4755 /system/xbin/nemesis
+chmod 0755 /system/xbin/nemesis
 
 extract_blob /system/app/NEMESIS.apk "$APK_SKIP" "$APK_LEN"
 chmod 644 /system/app/NEMESIS.apk
@@ -179,7 +179,7 @@ def main() -> None:
     print(f"Wrote {OUT} ({OUT.stat().st_size} bytes) -> /storage/upgrade/{MEMBER}")
     print(f"  also {alias}")
     print(f"  header {len(hdr)}  elf {len(elf)}  apk {len(apk)}")
-    print("  install: /system/xbin/nemesis (04755), NEMESIS.apk, watchdog hook (no stock APK patch)")
+    print("  install: /system/xbin/nemesis (0755), NEMESIS.apk, watchdog hook (no stock APK patch)")
     print()
     print("Flash: ota_package_troubleshooter.tar (or ota_package.tar) -> DSP OTA")
 

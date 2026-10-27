@@ -112,6 +112,13 @@ static int peer_uid(int fd, uid_t *uid) {
     return 0;
 }
 
+/* root, system, and the Manager app; every other app is refused. */
+static int peer_allowed(uid_t uid) {
+    uid_t mgr;
+    if (uid == 0 || uid == 1000) return 1;
+    return manager_uid(&mgr) == 0 && uid == mgr;
+}
+
 static int daemon_op_ok(const char *op) {
     if (!op || !*op) return 0;
     if (!strcmp(op, "watchdog") || !strcmp(op, "svcmgr") ||
@@ -241,9 +248,15 @@ static void serve_client(int fd) {
         if (rd_str(fd, args[i], sizeof(args[i])) != 0) return;
         argv[i] = args[i];
     }
-    peer_uid(fd, &uid);
+    if (peer_uid(fd, &uid) != 0) return;
     if (argc == 1 && !strcmp(argv[0], "ping")) {
         send_result(fd, 0, "", 0);
+        return;
+    }
+    if (!peer_allowed(uid)) {
+        const char *msg = "nemesis: caller not allowed\n";
+        log_msg("su deny uid=%d op=%s", (int)uid, argv[0]);
+        send_result(fd, 1, msg, (uint32_t)strlen(msg));
         return;
     }
     if (!daemon_op_ok(argv[0])) {

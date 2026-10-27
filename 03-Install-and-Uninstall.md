@@ -54,7 +54,7 @@ Dalvik odex for Manager is deleted **only during this OTA script**, not on every
 
 | Path | Mode / notes |
 |------|----------------|
-| `/system/xbin/nemesis` | `04755`, owner `root:root` |
+| `/system/xbin/nemesis` | `0755`, owner `root:root`. Not SUID: non-root callers go through the daemon, which only accepts root, system, and the `/system/app` Manager. |
 | `/system/app/NEMESIS.apk` | `0644`. Manifest `MAIN` only (no `LAUNCHER`). |
 | `/system/etc/install-recovery.sh` | `0755`. Stock firmware has no useful file here; init `flash_recovery` runs it at class `main` oneshot. |
 | `/system/etc/qb_runtime.sh` | **Append** of a `NEMESIS_QB_HOOK` block if the marker is not already present. Stock body is not replaced. |

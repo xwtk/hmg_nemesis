@@ -13,7 +13,8 @@
 
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
-#define NEMESIS_TMP "/data/local/tmp/nemesis"
+#define NEMESIS_TMP "/data/nemesis/tmp"
+#define NEMESIS_TMP_LEGACY "/data/local/tmp/nemesis"
 #define NEMESIS_LOGS "/data/nemesis/logs"
 #define NEMESIS_LOGFILE "/data/nemesis/nemesis.log"
 #define NEMESIS_BINDIR "/data/nemesis/bin"
@@ -41,6 +42,8 @@
 #define SM_PIDFILE "/data/nemesis/svcmgr.pid"
 #define SU_SOCK_DEV "/dev/nemesis.sock"
 #define SU_SOCK_DATA "/data/nemesis/root.sock"
+#define PACKAGES_XML "/data/system/packages.xml"
+#define USB_RECOVERY_FLAG "/data/nemesis/usb-recovery"
 
 #define MAX_PATH 512
 #define MAX_LINE 1024
@@ -103,6 +106,8 @@ int pidfile_is(const char *path, const char *needle);
 int pidfile_lock(const char *path);
 int usb0_mounted(void);
 int framework_up(void);
+int manager_uid(uid_t *out);
+void secure_session_dir(void);
 int detach_daemon(void);
 void daemon_ready(void);
 void qname_join(char *out, size_t cap, const char *id, const char *local);
