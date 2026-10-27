@@ -43,6 +43,7 @@
 #define SU_SOCK_DEV "/dev/nemesis.sock"
 #define SU_SOCK_DATA "/data/nemesis/root.sock"
 #define PACKAGES_XML "/data/system/packages.xml"
+#define ADB_ROOT_FLAG "/data/nemesis/allow-adb-root"
 
 #define MAX_PATH 512
 #define MAX_LINE 1024

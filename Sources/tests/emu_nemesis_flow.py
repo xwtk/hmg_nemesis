@@ -564,9 +564,9 @@ def run_cli_tests(g: Guest) -> None:
         fail("watchdog died on SIGHUP (init oneshot would kill it)")
     print("OK: watchdog ignored SIGHUP", flush=True)
     g.cmd("cd /data/local/tmp", timeout=10)
+    out = g.cmd("ls -l /system/xbin/nemesis", timeout=10)
+    expect_not(out, "rws", "nemesis CLI is not SUID")
     out = g.cmd("/system/xbin/nemesis pkg-list", timeout=20)
-    if "not SUID root" in out:
-        fail("watchdog/pkg-list (SUID/euid)", out)
     expect(out, "usb-handler", "seeded locked usb-handler")
     expect(out, "usb-handler|USB Handler|1|", "usb-handler is locked")
 
@@ -582,29 +582,34 @@ def run_cli_tests(g: Guest) -> None:
         timeout=10,
     )
     out = g.cmd(
-        "/system/xbin/nemesis root 2000 -c '/data/local/tmp/nemesis-app pkg-list'; echo APP_RC=$?",
+        "/system/xbin/nemesis root 1000 -c '/data/local/tmp/nemesis-app pkg-list'; echo SYS_RC=$?",
         timeout=20,
     )
-    if "not SUID root" in out or "daemon not running" in out:
-        fail("shell-uid client pkg-list", out)
-    expect(out, "usb-handler|USB Handler|1|", "pkg-list via daemon as uid 2000")
-    expect(out, "APP_RC=0", "daemon client exit 0")
+    if "daemon not running" in out:
+        fail("system-uid client pkg-list", out)
+    expect(out, "usb-handler|USB Handler|1|", "pkg-list via daemon as uid 1000")
+    expect(out, "SYS_RC=0", "system uid allowed")
+    # Only root, system and the Manager may use the daemon (adb shell only if opted in).
+    for uid in (2000, 10208, 12345):
+        out = g.cmd(
+            f"/system/xbin/nemesis root {uid} -c '/data/local/tmp/nemesis-app pkg-list'; echo DENY_RC=$?",
+            timeout=20,
+        )
+        expect(out, "caller not allowed", f"uid {uid} refused by daemon")
+        expect_not(out, "DENY_RC=0", f"uid {uid} client exits non-zero")
     out = g.cmd(
-        "/system/xbin/nemesis root 10208 -c '/data/local/tmp/nemesis-app pkg-list'; echo MGR_RC=$?",
-        timeout=20,
+        "grep -o '<package name=\"com.nemesis.manager\"[^>]*' /data/system/packages.xml; echo PX_DONE",
+        timeout=10,
     )
-    if "not SUID root" in out or "daemon not running" in out or "root denied" in out:
-        fail("app-uid client pkg-list", out)
-    expect(out, "usb-handler|USB Handler|1|", "pkg-list via daemon as uid 10208")
-    expect(out, "MGR_RC=0", "app uid allowed")
-    out = g.cmd(
-        "/system/xbin/nemesis root 12345 -c '/data/local/tmp/nemesis-app pkg-list'; echo ANY_RC=$?",
-        timeout=20,
-    )
-    if "not SUID root" in out or "daemon not running" in out or "root denied" in out:
-        fail("arbitrary uid client pkg-list", out)
-    expect(out, "usb-handler|USB Handler|1|", "pkg-list via daemon as uid 12345")
-    expect(out, "ANY_RC=0", "any uid allowed")
+    m = re.search(r' userId="(\d+)"', out)
+    if m:
+        out = g.cmd(
+            f"/system/xbin/nemesis root {m.group(1)} -c '/data/local/tmp/nemesis-app pkg-list'; echo MGR_RC=$?",
+            timeout=20,
+        )
+        expect(out, "MGR_RC=0", "Manager uid allowed")
+    else:
+        print("SKIP: Manager not registered in packages.xml", flush=True)
 
     print("== qb_runtime hook must return and keep watchdog ==", flush=True)
     t0 = time.time()

@@ -118,7 +118,8 @@ int ensure_dirs(void) {
     chmod(PACKAGES_DB, 0644);
     chmod(SERVICES_DB, 0644);
     chmod(NEMESIS_LOGFILE, 0644);
-    chmod(BIN_PATH, 04755);
+    /* Not SUID: callers reach root only through the daemon's uid check. */
+    chmod(BIN_PATH, 0755);
     install_mount_wrap();
     return 0;
 }

@@ -56,6 +56,27 @@ sleep 3
 echo "== checks"
 # API 19 adb shell always exits 0, so every check judges captured output, never a device exit code.
 check "watchdog started from install-recovery.sh at boot" 'pinged'
+out=$(sh_ ls -l /system/xbin/nemesis)
+check "CLI is not SUID" '! echo "$out" | grep -q rws' "$out"
+
+out=$(sh_ su 1000 /system/xbin/nemesis root -c id)
+check "system uid (1000) gets root via daemon" 'echo "$out" | grep -q "uid=0"' "$out"
+if [ -n "$MGR" ]; then
+    out=$(sh_ su "$MGR" /system/xbin/nemesis root -c id)
+    check "Manager uid ($MGR) gets root via daemon" 'echo "$out" | grep -q "uid=0"' "$out"
+else
+    bad "Manager registered in packages.xml"
+fi
+out=$(sh_ su $APP_UID /system/xbin/nemesis root -c id)
+check "other app uid ($APP_UID) refused root" '! echo "$out" | grep -q "uid=0"' "$out"
+out=$(sh_ su $SHELL_UID /system/xbin/nemesis root -c id)
+check "shell uid ($SHELL_UID, adb) refused root" '! echo "$out" | grep -q "uid=0"' "$out"
+sh_ touch /data/nemesis/allow-adb-root
+out=$(sh_ su $SHELL_UID /system/xbin/nemesis root -c id)
+check "shell uid gets root once the owner creates allow-adb-root" 'echo "$out" | grep -q "uid=0"' "$out"
+out=$(sh_ su $APP_UID /system/xbin/nemesis root -c id)
+check "allow-adb-root does not open root to other apps" '! echo "$out" | grep -q "uid=0"' "$out"
+sh_ rm -f /data/nemesis/allow-adb-root
 
 out=$(sh_ su $SHELL_UID am start -W -n com.nemesis.manager/.DialogActivity --es nemesis_mode result_ok 2>&1)
 check "other uid cannot start DialogActivity (wipe_run vector)" 'echo "$out" | grep -qi "permission denial\|securityexception"' "$(echo "$out" | head -3)"
