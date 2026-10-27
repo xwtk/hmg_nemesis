@@ -23,6 +23,7 @@
 #define SERVICES_DB "/data/nemesis/services.db"
 #define PIDS_DIR "/data/nemesis/pids"
 #define SESSION_DIR "/data/nemesis/usb-session"
+#define USB_RECOVERY_FLAG "/data/nemesis/usb-recovery"
 #define USB0 "/storage/usb0"
 #define USB0_MNT "/mnt/media_rw/usb0"
 #define USB1 "/storage/usb1"

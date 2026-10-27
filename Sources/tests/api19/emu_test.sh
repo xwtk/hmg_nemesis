@@ -80,6 +80,54 @@ check "other app cannot write the NEMESIS log" '! echo "$out" | grep -q forged' 
 out=$(sh_ "ls -l /data/nemesis /data/nemesis/bin; ls -ld /data/local/tmp/nemesis" 2>/dev/null)
 check "no world-writable NEMESIS dirs or files" '! echo "$out" | grep -q "^[d-].......w"' "$(echo "$out" | grep "^[d-].......w")"
 
+# Simulated stick: bind mount on /storage/usb0 like the car. The mount point lives on
+# read-only rootfs, so create it once. Files are pushed: 4.4 has no printf.
+USB=/storage/usb0
+sh_ "mount -o rw,remount /; mkdir -p $USB; mount -o ro,remount /"
+usb_stick() {  # $1 = marker text
+    local t
+    sh_ "umount $USB 2>/dev/null; rm -rf /data/local/tmp/usb-sim; mkdir -p /data/local/tmp/usb-sim $USB"
+    t=$(mktemp -d)
+    printf '[nemesis]\nversion=1.0\ntype=execute\npath=NEMESIS.sh\nid=%s\n' "$1" >"$t/NEMESIS.data"
+    printf '#!/system/bin/sh\necho %s > /data/nemesis/usb-ran\n' "$1" >"$t/NEMESIS.sh"
+    adb push "$t/NEMESIS.data" "$t/NEMESIS.sh" /data/local/tmp/usb-sim/ >/dev/null
+    rm -rf "$t"
+    sh_ rm -f /data/nemesis/usb-ran
+    sh_ mount -o bind /data/local/tmp/usb-sim $USB
+}
+usb_mounted() { sh_ cat /proc/mounts | grep -q " $USB " && sh_ ls $USB/ | grep -q NEMESIS.data; }
+ran() { sh_ cat /data/nemesis/usb-ran 2>/dev/null | grep -q "$1"; }
+
+echo "== USB while Android is down (sys.boot_completed=0)"
+sh_ rm -f /data/nemesis/usb-recovery
+sh_ setprop sys.boot_completed 0
+usb_stick held
+check "simulated USB stick is mounted" 'usb_mounted' "$(sh_ cat /proc/mounts | grep usb)"
+sleep 10
+check "stick inserted while Android down is NOT run unattended" '! ran held'
+sh_ setprop sys.boot_completed 1
+for _ in $(seq 1 20); do sh_ cat /data/nemesis/nemesis.log | grep -q 'usb prompt confirm_execute' && break; sleep 1; done
+# The handler clears any old reply after `am start` returns, so answer until it runs,
+# as the Manager's Yes button would.
+for _ in $(seq 1 15); do
+    sh_ su "${MGR:-1000}" sh -c "'echo yes > /data/nemesis/usb-session/reply'" >/dev/null 2>&1
+    sleep 1
+    ran held && break
+done
+check "held stick prompts once Android is up and runs on Manager 'yes'" 'ran held'
+# Dismiss the result dialog (handler waits for OK or unplug), then unplug.
+for _ in 1 2 3; do sh_ su "${MGR:-1000}" sh -c "'echo ok > /data/nemesis/usb-session/reply'" >/dev/null 2>&1; sleep 1; done
+sh_ umount $USB
+sleep 3
+
+sh_ touch /data/nemesis/usb-recovery
+sh_ setprop sys.boot_completed 0
+usb_stick flagged
+for _ in $(seq 1 15); do ran flagged && break; sleep 1; done
+check "owner recovery flag allows unattended run" 'ran flagged'
+sh_ "umount $USB; rm -f /data/nemesis/usb-recovery"
+sh_ setprop sys.boot_completed 1
+
 echo
 echo "passed $pass, failed $failed"
 [ -n "${KEEP:-}" ] || adb emu kill >/dev/null 2>&1

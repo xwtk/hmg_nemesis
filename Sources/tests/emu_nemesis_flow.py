@@ -24,6 +24,7 @@ from guest import Guest  # noqa: E402
 
 QEMU_PID = None
 STARTED = False
+RECOVERY_FLAG = "/data/nemesis/usb-recovery"
 USB_SIM = "/data/local/tmp/usb-sim"
 SESSION_REPLY = "/data/nemesis/usb-session/reply"
 SESSION_LOG = "/data/nemesis/logs/usb-session.log"
@@ -807,6 +808,31 @@ def run_usb_tests(g: Guest) -> None:
     expect(out, "replace-ok", "execute ran after in-place NEMESIS.data replace")
     print("OK: descriptor change re-arms the handler", flush=True)
 
+    print("== USB: android down without recovery flag holds the stick ==", flush=True)
+    usb_eject(g)
+    g.cmd(f"rm -f {RECOVERY_FLAG} /data/nemesis/usb-exec.ok", timeout=10)
+    g.cmd(f"rm -rf {USB_SIM}; mkdir -p {USB_SIM}", timeout=10)
+    write_text(
+        g,
+        f"{USB_SIM}/NEMESIS.data",
+        "[nemesis]\nversion=1.0\ntype=execute\npath=NEMESIS.sh\n",
+    )
+    write_text(
+        g,
+        f"{USB_SIM}/NEMESIS.sh",
+        "#!/system/bin/sh\necho held-ran > /data/nemesis/usb-exec.ok\nexit 0\n",
+    )
+    prev = session_log(g)
+    usb_insert(g)
+    log = usb_wait_handled(g, prev, timeout=6)
+    if log.count("handled type=") > prev.count("handled type="):
+        fail("stick handled while Android down and no recovery flag", log)
+    out = g.cmd("cat /data/nemesis/usb-exec.ok 2>/dev/null; echo HELD_DONE", timeout=10)
+    expect_not(out, "held-ran", "execute did not run unattended")
+    g.cmd(f"touch {RECOVERY_FLAG}", timeout=10)
+    log = usb_wait_handled(g, prev, timeout=15)
+    expect(log, "reply=recovery", "held stick runs once the owner sets the recovery flag")
+
     print("== USB: eject + reinsert execute (android-down recovery) ==", flush=True)
     usb_eject(g)
     g.cmd(f"rm -rf {USB_SIM}; mkdir -p {USB_SIM}", timeout=10)
@@ -980,6 +1006,7 @@ def run_usb_tests(g: Guest) -> None:
     out = g.cmd("cat /data/nemesis/usb-exec.ok", timeout=10)
     expect(out, "after-restart", "USB recovery script ran after handler restart")
     usb_eject(g)
+    g.cmd(f"rm -f {RECOVERY_FLAG}", timeout=10)
 
     print("== stale svcmgr pid must be replaced ==", flush=True)
     sm = pid_of(g, SM_PID)

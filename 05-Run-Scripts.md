@@ -81,7 +81,7 @@ path=NEMESIS.sh
 
 `path` can be another relative name (`scripts/diag.sh`) as long as the file exists on the stick.
 
-When Android is up, the dialog asks whether to execute the compatible item on the USB drive. **Yes** runs the script; **No** skips. When Android is down, the Handler logs `android down; auto-confirm` and runs it (so a stick can recover a unit that is not showing UI).
+When Android is up, the dialog asks whether to execute the compatible item on the USB drive. **Yes** runs the script; **No** skips. When Android is down, nobody can answer the dialog, so the Handler holds the stick and prompts once Android is up. Unattended runs (recovering a unit that never shows UI) happen only if the owner has created the root-owned flag `/data/nemesis/usb-recovery`, for example from a prompted `type=execute` script: `touch /data/nemesis/usb-recovery`. Delete it again when done.
 
 The script is started as:
 
