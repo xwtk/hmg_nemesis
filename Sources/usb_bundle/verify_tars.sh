@@ -4,7 +4,7 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 path="$DIR/ota_package_troubleshooter.tar"
 if [ ! -f "$path" ]; then
-    echo "MISSING $path — run: make -C /home/xwtk/nemesis troubleshooter"
+    echo "MISSING $path — run: make -C "$DIR/.." troubleshooter"
     exit 1
 fi
 echo "=== ota_package_troubleshooter.tar ==="

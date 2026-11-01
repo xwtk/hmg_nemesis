@@ -1,8 +1,12 @@
 [nemesis]
-version=1.0
+version=1.1
 id=projection.tbt
 name=Projection cluster TBT
-types=application
+type=application
+package-version=1.0.0
+short-desc="Turn-by-turn on the cluster during projection."
+os="ECOKMC.USA.*.260507"
+models="cvev_us"
 preinstall=scripts/pre.sh
 postinstall=scripts/post.sh
 preuninstall=scripts/preun.sh

@@ -3,10 +3,11 @@
 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
 export LD_LIBRARY_PATH=/vendor/lib:/system/lib
 
+# wipe reboots by itself once everything is removed. Any other exit code
+# means a package uninstall failed (3) or core files stayed (1): no reboot.
 if [ -x /system/xbin/nemesis ]; then
     /system/xbin/nemesis wipe --confirm
-    reboot
-    exit 0
+    exit $?
 fi
 
 QB_RUNTIME=/system/etc/qb_runtime.sh

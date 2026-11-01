@@ -7,6 +7,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ScrollView;
@@ -19,7 +20,22 @@ final class Ui {
     private static final int MUTED = 0xFF62797F;
     private static boolean watchdogStarted;
 
+    /** HMG's finishActivity() throws SecurityException without GET_TASKS.
+     *  The manifest asks for it; a build missing the grant still closes. */
+    static void close(Activity a) {
+        try {
+            a.finish();
+        } catch (SecurityException e) {
+            CrashLog.record(e);
+            try {
+                a.moveTaskToBack(true);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     static boolean setLayout(Activity a, int layoutRes) {
+        CrashLog.install(a);
         try {
             a.setContentView(layoutRes);
             return a.findViewById(android.R.id.content) != null;
@@ -31,17 +47,20 @@ final class Ui {
     static void bindTitle(final Activity a, int titleRes) {
         TextView t = (TextView) a.findViewById(R.id.title_bar_text);
         if (t != null) t.setText(titleRes);
-        TextView ver = (TextView) a.findViewById(R.id.title_bar_version);
-        if (ver != null) ver.setText(versionName(a));
         View c = a.findViewById(R.id.btn_close);
         if (c != null) {
-            if (c instanceof Button) ((Button) c).setText(R.string.close);
             c.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
-                    a.finish();
+                    close(a);
                 }
             });
         }
+    }
+
+    /** The author line next to the title. Home only; screens below it show the title alone. */
+    static void showCredit(Activity a) {
+        View v = a.findViewById(R.id.title_bar_credit);
+        if (v != null) v.setVisibility(View.VISIBLE);
     }
 
     static String versionName(Context c) {
@@ -90,33 +109,38 @@ final class Ui {
         title.setOrientation(LinearLayout.HORIZONTAL);
         title.setGravity(Gravity.CENTER_VERTICAL);
         title.setBackgroundColor(0xFF111314);
-        title.setPadding(dp(a, 16), 0, dp(a, 8), 0);
+        title.setPadding(dp(a, 22), 0, dp(a, 4), 0);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(a, 60));
         title.setLayoutParams(tp);
-
-        TextView ver = new TextView(a);
-        ver.setId(R.id.title_bar_version);
-        ver.setTextColor(TITLE_FG);
-        ver.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-        ver.setGravity(Gravity.CENTER_VERTICAL);
-        title.addView(ver, new LinearLayout.LayoutParams(dp(a, 72), dp(a, 60)));
 
         TextView tv = new TextView(a);
         tv.setId(R.id.title_bar_text);
         tv.setText(R.string.title);
         tv.setTextColor(TITLE_FG);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
-        tv.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(a, 60), 1);
-        title.addView(tv, tlp);
+        tv.setGravity(Gravity.CENTER_VERTICAL);
+        tv.setSingleLine(true);
+        title.addView(tv, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(a, 60)));
 
-        Button close = new Button(a);
+        TextView credit = new TextView(a);
+        credit.setId(R.id.title_bar_credit);
+        credit.setText(R.string.credit);
+        credit.setTextColor(MUTED);
+        credit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        credit.setGravity(Gravity.CENTER_VERTICAL);
+        credit.setSingleLine(true);
+        credit.setPadding(dp(a, 16), 0, 0, 0);
+        credit.setVisibility(View.GONE);
+        title.addView(credit, new LinearLayout.LayoutParams(0, dp(a, 60), 1));
+
+        ImageButton close = new ImageButton(a);
         close.setId(R.id.btn_close);
-        close.setText(R.string.close);
-        close.setTextColor(TITLE_FG);
+        close.setImageResource(R.drawable.ic_close);
+        close.setContentDescription(a.getString(R.string.close));
         close.setBackgroundColor(Color.TRANSPARENT);
-        title.addView(close, new LinearLayout.LayoutParams(dp(a, 120), dp(a, 52)));
+        title.addView(close, new LinearLayout.LayoutParams(dp(a, 72), dp(a, 60)));
         root.addView(title);
 
         if (withLog) {

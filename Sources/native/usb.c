@@ -273,10 +273,8 @@ static int wait_reply(char *out, size_t cap, int seconds) {
             snprintf(out, cap, "unmount");
             return -1;
         }
-        if (is_file(path)) {
-            read_file(path, out, cap);
-            return 0;
-        }
+        /* Empty: the writer has created the file but not filled it yet. */
+        if (is_file(path) && read_file(path, out, cap) > 0) return 0;
         sleep(1);
     }
     snprintf(out, cap, "timeout");
@@ -345,6 +343,13 @@ static const char *usb_root_for(const char *meta) {
     return USB0;
 }
 
+/* Flag file on the stick root: lets the handler act while Android is down. */
+static int usb_emergency(const char *root) {
+    char path[MAX_PATH];
+    snprintf(path, sizeof(path), "%s/NEMESIS.emergency", root);
+    return is_file(path);
+}
+
 static void do_execute(const char *full, const char *root) {
     int rc;
     char nreply[128];
@@ -386,8 +391,7 @@ static void do_install(const char *full, char *reply, size_t cap) {
         usb_notify("forbidden", full, info_id, info_name, reply, cap);
         return;
     }
-    /* Android is down: no dialog, keep the recovery update. With Android up,
-     * an installed package must be removed by the user before the USB copy. */
+    /* Android is down: no dialog, keep the recovery update. */
     if (inst && !framework_up()) {
         char cmd[MAX_PATH + 64];
         int rc;
@@ -398,19 +402,113 @@ static void do_install(const char *full, char *reply, size_t cap) {
                    nreply, sizeof(nreply));
         return;
     }
+    /* Installed, Android up: same as the Store's Update, uninstall then install. */
     if (inst) {
-        usb_notify("uninstall_first", full, info_id, info_name, reply, cap);
+        char cmd[MAX_PATH + 64];
+        if (!usb_confirm("confirm_reinstall", full, info_id, info_name, reply, cap)) return;
+        /* info_id matched packages.db, so it is a validated id and safe to quote. */
+        snprintf(cmd, sizeof(cmd), "%s uninstall '%s'", BIN_PATH, info_id);
+        if (run_cmd(cmd) != 0) {
+            log_msg("usb reinstall %s: uninstall failed", info_id);
+            usb_notify("result_fail", full, info_id, info_name, nreply, sizeof(nreply));
+            return;
+        }
+    } else if (!usb_confirm("confirm_install", full, info_id, info_name, reply, cap)) {
         return;
     }
-    if (!usb_confirm("confirm_install", full, info_id, info_name, reply, cap)) return;
     {
         char cmd[MAX_PATH + 64];
         int rc;
         snprintf(cmd, sizeof(cmd), "%s install '%s'", BIN_PATH, full);
         rc = run_cmd(cmd);
+        /* Not marked compatible: only a user on screen may accept the risk. */
+        if (rc == 20 && framework_up()) {
+            char rreply[128];
+            am_dialog("confirm_risk", full, info_id, info_name);
+            if (wait_reply(rreply, sizeof(rreply), USB_PROMPT_SEC) == 0 && reply_yes(rreply)) {
+                log_msg("install %s: user accepted compatibility risk", info_id);
+                snprintf(cmd, sizeof(cmd), "%s install --accept-risk '%s'", BIN_PATH, full);
+                rc = run_cmd(cmd);
+            } else {
+                log_msg("install %s: compatibility risk declined", info_id);
+                return;
+            }
+        }
         usb_notify(rc == 0 ? "result_ok" : "result_fail", full, info_id, info_name,
                    nreply, sizeof(nreply));
     }
+}
+
+/* type=update: a NEMESIS core update zip. Runs before any other type.
+ * Same or older than the running core: report, do not prompt. */
+static void do_update(const char *full, char *reply, size_t cap) {
+    ini_file zi;
+    pkg_meta m;
+    char cmd[MAX_PATH + 64], nreply[128];
+    int rc;
+    if (!is_file(full) || load_zip_meta(full, &zi, &m) != 0) {
+        usb_notify("invalid", full, "", "", reply, cap);
+        return;
+    }
+    ini_free(&zi);
+    if (strcmp(m.id, CORE_ID) || !m.pkg_ver[0]) {
+        log_msg("usb update: %s is not a NEMESIS update", full);
+        usb_notify("invalid", full, "", "", reply, cap);
+        return;
+    }
+    if (ver_cmp(m.pkg_ver, NEMESIS_VERSION) <= 0) {
+        log_msg("usb update: %s is not newer than %s", m.pkg_ver, NEMESIS_VERSION);
+        usb_notify("up_to_date", full, CORE_ID, NEMESIS_VERSION, reply, cap);
+        if (!framework_up()) snprintf(reply, cap, "up-to-date");
+        return;
+    }
+    if (!usb_confirm("confirm_update", full, CORE_ID, m.pkg_ver, reply, cap)) return;
+    log_msg("usb update: installing %s", m.pkg_ver);
+    snprintf(cmd, sizeof(cmd), "%s update '%s'", BIN_PATH, full);
+    rc = run_cmd(cmd);
+    if (rc == 20 && framework_up()) {
+        char rreply[128];
+        am_dialog("confirm_risk", full, CORE_ID, m.pkg_ver);
+        if (wait_reply(rreply, sizeof(rreply), USB_PROMPT_SEC) != 0 || !reply_yes(rreply)) {
+            log_msg("usb update: compatibility risk declined");
+            return;
+        }
+        snprintf(cmd, sizeof(cmd), "%s update --accept-risk '%s'", BIN_PATH, full);
+        rc = run_cmd(cmd);
+    }
+    /* On success the unit is rebooting by now. */
+    log_msg("usb update: rc=%d", rc);
+    usb_notify(rc == 0 ? "result_ok" : "result_fail", full, CORE_ID, m.pkg_ver, nreply, sizeof(nreply));
+}
+
+/* type=list: the Store on the stick's package list. Needs the Manager. */
+static void do_list(const char *meta, char *reply, size_t cap) {
+    char m[MAX_PATH];
+    char *argv[16];
+    int n = 0;
+    snprintf(m, sizeof(m), "%s", meta);
+    sanitize_extra(m);
+    argv[n++] = (char *)"am";
+    argv[n++] = (char *)"start";
+    argv[n++] = (char *)"-n";
+    argv[n++] = (char *)MANAGER_STORE;
+    argv[n++] = (char *)"-f";
+    argv[n++] = (char *)"0x10000000";
+    add_es(argv, &n, "store_mode", "usb");
+    add_es(argv, &n, "store_list", m);
+    argv[n++] = NULL;
+    spawn_am(argv);
+    snprintf(reply, cap, "store");
+    log_msg("usb list: store opened on %s", meta);
+}
+
+static int type_has(const char *types, const char *want) {
+    const char *p = types;
+    char item[64];
+    if (!types) return 0;
+    while (meta_list_next(&p, item, sizeof(item)))
+        if (!strcmp(item, want)) return 1;
+    return 0;
 }
 
 typedef struct {
@@ -437,10 +535,47 @@ static int usb_ident_eq(const usb_ident *a, const usb_ident *b) {
            a->size == b->size && a->mtime == b->mtime;
 }
 
+/* usb-info: what the Manager needs to know about the stick, key=value.
+ * --list prints the descriptor itself, for the Store. */
+int cmd_usb_info(int list) {
+    char meta[MAX_PATH];
+    ini_file ini;
+    const char *type, *rel, *root;
+    if (!usb0_mounted() || usb_meta_path(meta, sizeof(meta)) != 0) {
+        printf("mounted=%d\n", usb0_mounted() ? 1 : 0);
+        fflush(stdout);
+        return 1;
+    }
+    root = usb_root_for(meta);
+    if (list) {
+        char buf[4096];
+        size_t n;
+        FILE *f = fopen(meta, "r");
+        if (!f) return 1;
+        while ((n = fread(buf, 1, sizeof(buf), f)) > 0) fwrite(buf, 1, n, stdout);
+        fclose(f);
+        fflush(stdout);
+        return 0;
+    }
+    printf("mounted=1\nmeta=%s\nroot=%s\n", meta, root);
+    if (ini_load(&ini, meta) != 0) {
+        fflush(stdout);
+        return 1;
+    }
+    type = ini_get(&ini, "nemesis", "type");
+    rel = ini_get(&ini, "nemesis", "path");
+    printf("type=%s\n", type ? type : "");
+    if (rel && rel_ok(rel)) printf("path=%s/%s\n", root, rel);
+    ini_free(&ini);
+    fflush(stdout);
+    return 0;
+}
+
 int cmd_usb_handler(void) {
     int handled = 0;
     int wait_type = 0;
     int have_ident = 0;
+    int waiting = 0;
     usb_ident last_id;
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
@@ -457,6 +592,7 @@ int cmd_usb_handler(void) {
             handled = 0;
             have_ident = 0;
             wait_type = 0;
+            waiting = 0;
             sleep(1);
             continue;
         }
@@ -465,6 +601,7 @@ int cmd_usb_handler(void) {
             handled = 0;
             have_ident = 0;
             wait_type = 0;
+            waiting = 0;
             sleep(1);
             continue;
         }
@@ -480,11 +617,24 @@ int cmd_usb_handler(void) {
             sleep(1);
             continue;
         }
+        /*
+         * Android down: act only for a stick that carries NEMESIS.emergency.
+         * Anything else waits for Android and is then prompted as usual, so a
+         * stick left plugged in does not run again on the next boot.
+         */
+        if (!framework_up() && !usb_emergency(usb_root_for(meta))) {
+            if (!waiting) log_msg("usb: android down, no NEMESIS.emergency; waiting for Android");
+            waiting = 1;
+            sleep(1);
+            continue;
+        }
+        if (waiting) log_msg("usb: %s; handling stick", framework_up() ? "android up" : "NEMESIS.emergency found");
+        waiting = 0;
         {
             char reply[128];
             ini_file ini;
             const char *type, *rel, *root;
-            int is_exec, is_inst, is_open;
+            int is_exec, is_inst, is_open, is_upd, is_list;
             reply[0] = 0;
             mkdir_p(SESSION_DIR, 0755);
             chmod(SESSION_DIR, 0777);
@@ -514,10 +664,37 @@ int cmd_usb_handler(void) {
                 continue;
             }
             wait_type = 0;
+            is_upd = type_has(type, "update");
+            is_list = !is_upd && type_has(type, "list");
+            /* The Store needs the Manager, even on an emergency stick. */
+            if (is_list && !framework_up()) {
+                ini_free(&ini);
+                if (!waiting) log_msg("usb: type=list waits for Android");
+                waiting = 1;
+                sleep(1);
+                continue;
+            }
             log_msg("usb descriptor %s type=%s", meta, type);
-            is_exec = type && !strcmp(type, "execute");
-            is_inst = type && !strcmp(type, "install");
-            is_open = type && !strcmp(type, "open");
+            is_exec = !is_upd && !strcmp(type, "execute");
+            is_inst = !is_upd && !strcmp(type, "install");
+            is_open = !is_upd && !strcmp(type, "open");
+            if (is_upd || is_list) {
+                if (is_upd && !rel_ok(rel)) {
+                    usb_notify("invalid", meta, "", "", reply, sizeof(reply));
+                } else if (is_upd) {
+                    char full[MAX_PATH];
+                    snprintf(full, sizeof(full), "%s/%s", root, rel);
+                    do_update(full, reply, sizeof(reply));
+                } else {
+                    do_list(meta, reply, sizeof(reply));
+                }
+                handled = 1;
+                have_ident = usb_ident_of(meta, &last_id) == 0;
+                log_handled(is_upd ? "update" : "list", rel, reply);
+                ini_free(&ini);
+                sleep(1);
+                continue;
+            }
             if (!is_exec && !is_inst && !is_open) {
                 usb_notify("invalid", meta, "", "", reply, sizeof(reply));
                 handled = 1;

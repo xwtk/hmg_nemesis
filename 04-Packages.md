@@ -14,13 +14,13 @@ Installed layout:
 
 ```text
 /data/nemesis/apps/<id>/          unpacked tree
-/data/nemesis/packages.db         id|name|locked|types
+/data/nemesis/packages.db         id|name|locked|types|package-version|short-desc
 /data/nemesis/services.db         registered services
 ```
 
-The locked core package **`usb-handler`** is seeded by the service manager. It cannot be updated or uninstalled except by wiping NEMESIS.
+The locked core packages **`usb-handler`** and **`nemesis.update-monitor`** are seeded by the service manager. They cannot be updated or uninstalled except by wiping NEMESIS or by a `nemesis update` package that carries a newer copy.
 
-Same `id` already installed → **update** (Yes/No in Manager when Android is up; automatic when Android is down). There is never a second copy of the same id.
+Same `id` already installed → **update** (Yes/No in Manager when Android is up). With Android down, a stick is handled only if it has `NEMESIS.emergency`, and then without a prompt. There is never a second copy of the same id.
 
 ---
 
@@ -28,16 +28,44 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 
 | Key | Required | Meaning |
 |-----|----------|---------|
+| `version` | recommended | Descriptor format: `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. |
 | `id` | yes | Install id. Max 64 characters: letters, digits, `.`, `_`, `-`. No leading `.`, no `..`. |
 | `name` | recommended | Display name (defaults to `id`) |
-| `version` | recommended | Free-form version string |
-| `types` | recommended | Comma list, e.g. `application,service` (shown in `pkg-list`) |
+| `type` | recommended | Comma list, e.g. `application,service` (shown in `pkg-list`). A `1.0` descriptor names this key `types`, and each format reads the other name as a fallback. |
+| `package-version` | recommended | The package's own version. Dotted numbers only; anything else is refused. Used for updates and for `depends`. |
+| `short-desc` | recommended | One line for lists. Over 64 characters is refused. |
+| `detailed-desc` | no | Text for the details screen. Over 256 characters is refused. |
+| `depends` | no | Comma list of `id` or `id@spec`. See below. |
+| `os` | no | Comma list of OS version globs, or `any`. Missing means `any`. |
+| `models` | no | Comma list of model globs, or `any`. Missing means `any`. |
 | `preinstall` | no | Script run **before** the tree is copied, cwd = staging dir |
 | `postinstall` | no | Script run **after** copy, APK install, and service register; cwd = `/data/nemesis/apps/<id>` |
 | `preuninstall` | no | Script run after services are stopped, before APKs/`rm` |
 | `postuninstall` | no | Copied to tmp then run so it still exists after the tree is deleted |
 
 All listed scripts run as **root** (or `system` if you set `uid=system` on a service; hooks themselves use root).
+
+A `spec` in `depends` is one of:
+
+| Spec | Installed version must be |
+|------|---------------------------|
+| `any`, or no `@spec` | Anything |
+| `1.2` | Exactly 1.2 (`1.2.0` counts as the same) |
+| `>=1.2` | 1.2 or newer |
+| `<=1.2` | 1.2 or older |
+| `1.2-1.5` | From 1.2 to 1.5 |
+
+`os` and `models` items may use `*` and `?`. `nemesis compat <zip|package-id>` prints the verdict and its reasons:
+
+| Verdict | When |
+|---------|------|
+| `full` | Dependencies are met and `os` matches |
+| `partial` | Dependencies are met, `os` does not match, and `models` matches |
+| `incompatible` | A dependency is missing or the wrong version, or neither `os` nor `models` matches |
+
+`incompatible` stops the install with exit code 20 until `--accept-risk` is passed. Manager asks first.
+
+Dependencies also guard removal. Uninstalling a package that others depend on exits 4 and lists them. Updating it to a version that no longer satisfies them exits 21.
 
 ---
 
@@ -73,6 +101,8 @@ Sections `[service.0]`, `[service.1]`, … Registry name is **`<package-id>/<nam
 
 `kind=instance` is deferred while Android is down. `kind=sh` does not need zygote.
 
+A `mode=restart` service that dies 5 times is disabled and `service list` shows it as `failed`. Starting it by hand gives it one more run, and if it stays up for 10 seconds the count is cleared so restarts work again. If it dies during that run it stays disabled. Installing, updating, or uninstalling the package also clears the count.
+
 Stdout/stderr of `sh` services go to `/data/nemesis/logs/<id>/<name>.log` (survives reboot).
 
 CLI:
@@ -107,10 +137,14 @@ Minimal `NEMESIS.data`:
 
 ```ini
 [nemesis]
-version=1.0
+version=1.1
 id=my.tool
 name=My Tool
-types=application,service
+type=application,service
+package-version=1.0
+short-desc="One line for the list"
+os=any
+models=any
 preinstall=scripts/pre.sh
 postinstall=scripts/post.sh
 preuninstall=scripts/preun.sh
@@ -161,7 +195,23 @@ NEMESIS.data
 packages/my.tool.zip
 ```
 
-`path` must be relative (no `/`, no `..`, no shell metacharacters). Insert the stick. If Android is up, confirm install. If the id exists, you get an update prompt.
+`path` must be relative (no `/`, no `..`, no shell metacharacters). Insert the stick. If Android is up, confirm install. If the id exists, you get an update prompt. If Android is down, the stick waits for Android unless its root also has `NEMESIS.emergency`.
+
+**USB package list:** `type=list` opens the Package Store on the stick's own list. Each row is a section:
+
+```ini
+[nemesis]
+version=1.1
+type=list
+
+[package.0]
+path=packages/my.tool.zip
+name=My Tool
+short-desc=One line for the list
+published=2026-10-31
+```
+
+`path` is required and follows the same rules. A row with a bad `path` is dropped. `name` falls back to `path`. Use `YYYY-MM-DD` for `published`, because sorting by date compares the text.
 
 **CLI:**
 
@@ -170,7 +220,7 @@ nemesis install /storage/usb0/packages/my.tool.zip
 nemesis install --update /storage/usb0/packages/my.tool.zip
 ```
 
-**Manager:** Packages list after USB or CLI install; Launch / Uninstall there.
+**Manager:** **Package Store** installs from the portal or a `type=list` stick. Anything installed by any path appears in **My Packages**, which has Launch and Uninstall on the package's screen.
 
 ### 5.4 Uninstall
 
@@ -180,7 +230,7 @@ nemesis uninstall my.tool
 
 Uninstall runs `preuninstall` in `/data/nemesis/apps/<id>/`, removes that package's APKs and services, runs `postuninstall` if the package lists one, then deletes the package directory. `adb.tcp` and `wireless.projection` do not list `postuninstall`. Their snapshot in `/data/nemesis/backup/<id>/` is removed at the end of a successful `preuninstall`.
 
-Locked packages print `package is locked` and stay. Wipe NEMESIS removes everything, including locked.
+Locked packages print `package is locked` and stay. Wipe NEMESIS removes everything, including locked. If `preuninstall` or `pm uninstall` fails, the package stays, its services are started again, and the exit code is 5. `--force` carries on past that failure.
 
 ---
 
@@ -189,7 +239,9 @@ Locked packages print `package is locked` and stay. Wipe NEMESIS removes everyth
 1. Read `NEMESIS.data` from the zip; reject bad `id`.
 2. Refuse if locked and already installed.
 3. Require `--update` (or USB update confirm) if the id exists.
-4. Extract to `/data/local/tmp/nemesis/stage/<id>` (zip-slip `..` members are not applied).
-5. `preinstall` → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → register services → write `packages.db` → `postinstall` → start services.
+4. Refuse an update that would break an installed dependent (exit 21).
+5. Refuse an `incompatible` package unless `--accept-risk` is passed (exit 20).
+6. Extract to `/data/local/tmp/nemesis/stage/<id>` (zip-slip `..` members are not applied).
+7. `preinstall` → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → register services → write `packages.db` → `postinstall` → start services.
 
 Logs: `nemesis log dump` and `/data/nemesis/nemesis.log`.

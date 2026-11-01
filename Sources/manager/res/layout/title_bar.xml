@@ -7,36 +7,45 @@
         android:background="@drawable/co_bg_title_bar"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-        <TextView
-            android:id="@+id/title_bar_text"
-            android:gravity="center"
-            android:layout_gravity="center"
+        <!-- Left-aligned like the stock Setup title. The credit shows on home only. -->
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_gravity="left|center_vertical"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:text="@string/title"
-            style="@style/title_bar_text" />
-        <TextView
-            android:id="@+id/title_bar_version"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_gravity="left|center_vertical"
-            android:gravity="center_vertical"
-            android:paddingLeft="16dp"
-            android:paddingRight="8dp"
-            android:textColor="#ffb6c1c8"
-            android:textSize="20sp" />
-        <Button
+            android:paddingLeft="22dp"
+            android:layout_marginRight="80dp">
+            <TextView
+                android:id="@+id/title_bar_text"
+                android:gravity="center_vertical"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="@string/title"
+                style="@style/title_bar_text" />
+            <TextView
+                android:id="@+id/title_bar_credit"
+                android:text="@string/credit"
+                android:visibility="gone"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:paddingLeft="16dp"
+                android:singleLine="true"
+                android:textColor="#ff62797f"
+                android:textSize="20sp" />
+        </LinearLayout>
+        <ImageButton
             android:id="@+id/btn_close"
-            android:text="@string/close"
-            android:textSize="26sp"
-            android:textColor="@color/title_btn_text"
-            android:background="@drawable/co_bt_title"
+            android:src="@drawable/ic_close"
+            android:contentDescription="@string/close"
+            android:background="@null"
+            android:scaleType="center"
             android:layout_gravity="right|center_vertical"
-            android:layout_width="wrap_content"
+            android:layout_width="72dp"
             android:layout_height="60dp"
-            android:minWidth="120dp"
-            android:paddingLeft="18dp"
-            android:paddingRight="18dp"
-            android:layout_marginRight="8dp" />
+            android:layout_marginRight="4dp" />
     </FrameLayout>
 </FrameLayout>

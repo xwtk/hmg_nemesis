@@ -50,10 +50,10 @@ def main() -> None:
         text=True,
         errors="replace",
     )
-    if "(type 0x10)0x10" not in dump:
-        fail("Manager versionCode is not 16:\n" + dump[:800])
-    if 'versionName(0x0101021c)="1.15"' not in dump and '="1.15"' not in dump:
-        fail("Manager versionName is not 1.15:\n" + dump[:800])
+    if "(type 0x10)0x11" not in dump:
+        fail("Manager versionCode is not 17:\n" + dump[:800])
+    if 'versionName(0x0101021c)="1.16"' not in dump and '="1.16"' not in dump:
+        fail("Manager versionName is not 1.16:\n" + dump[:800])
     if "SetupReceiver" not in dump or "mobis.intent.action.SHORTCUT_SETUP" not in dump:
         fail("AndroidManifest missing SETUP shortcut receiver")
     if "mobis.intent.action.SHORTCUT_MODE" not in dump:
@@ -95,6 +95,16 @@ def main() -> None:
         fail("activity_main still has btn_usb (old layout)")
     if "list" not in tree:
         fail("activity_main missing ListView id list")
+    if "com.nemesis.manager.IconPager" not in tree:
+        fail("activity_main missing the icon pager")
+    for perm in ("android.permission.INTERNET", "android.permission.GET_TASKS"):
+        if perm not in dump:
+            fail(f"AndroidManifest missing {perm}")
+    for comp in ("StoreActivity", "SettingsActivity", "AppsActivity", "UpdateService", "EventReceiver"):
+        if comp not in dump:
+            fail(f"AndroidManifest missing {comp}")
+    if "OptionsActivity" in dump:
+        fail("AndroidManifest still names OptionsActivity")
     strings = subprocess.check_output(
         [AAPT, "dump", "resources", str(APK)],
         text=True,
@@ -108,7 +118,8 @@ def main() -> None:
         fail("DialogActivity is not the floating popup theme")
     for needle in ("close", "packages", "services", "logs",
                    "string/engineering", "string/dealer", "string/open_fail",
-                   "string/options", "string/trigger_button",
+                   "string/settings", "string/trigger_button",
+                   "string/store", "string/my_packages", "string/update_offline",
                    "string/installing", "string/uninstalling",
                    "string/confirm_install_named", "string/uninstall_first",
                    "string/confirm_uninstall", "string/confirm_stop"):
@@ -120,11 +131,11 @@ def main() -> None:
         errors="replace",
     )
     mid = re.search(
-        r"(0x7f[0-9a-f]+) com\.nemesis\.manager:id/title_bar_version",
+        r"(0x7f[0-9a-f]+) com\.nemesis\.manager:id/title_bar_credit",
         strings,
     )
     if not mid or ("@" + mid.group(1)) not in title:
-        fail("title_bar missing title_bar_version")
+        fail("title_bar missing title_bar_credit")
     list_xml = (ROOT / "manager" / "res" / "layout" / "activity_list.xml").read_text()
     if "co_bt_bottom" in list_xml:
         fail("activity_list still uses stretched co_bt_bottom")
@@ -144,7 +155,7 @@ def main() -> None:
         fail("popup card is full height")
     if "@drawable/co_bg\"" in dlg:
         fail("popup card uses the full-screen background bitmap")
-    print("OK: Manager APK DEX 035, all Java classes present, no Application, versionCode 16")
+    print("OK: Manager APK DEX 035, all Java classes present, no Application, versionCode 17")
 
 
 if __name__ == "__main__":

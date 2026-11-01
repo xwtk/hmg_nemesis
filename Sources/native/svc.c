@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <time.h>
 
 static void ignore_hup_pipe(void) {
     signal(SIGHUP, SIG_IGN);
@@ -38,7 +39,7 @@ static int find_svc(const char *qname, svc_rec *out) {
 }
 
 static pid_t svc_pid(const char *qname) {
-    char p[MAX_PATH], b[64];
+    char p[MAX_PATH], b[96];
     pid_path_for(p, sizeof(p), qname);
     if (read_file(p, b, sizeof(b)) < 0) return 0;
     return (pid_t)atoi(b);
@@ -60,8 +61,17 @@ static void svc_set_fails(const char *qname, int n) {
     write_file(p, b, 0644);
 }
 
+/* Install and uninstall start a service with a clean crash count. */
+void svc_forget(const char *qname) {
+    char p[MAX_PATH];
+    pid_path_for(p, sizeof(p), qname);
+    strcat(p, ".fails");
+    unlink(p);
+}
+
 static int svc_locked(const char *qname) {
-    return qname && !strncmp(qname, LOCKED_ID "/", (int)strlen(LOCKED_ID) + 1);
+    return qname && (!strncmp(qname, LOCKED_ID "/", (int)strlen(LOCKED_ID) + 1) ||
+                     !strncmp(qname, MONITOR_ID "/", (int)strlen(MONITOR_ID) + 1));
 }
 
 static int svc_proc_ok(const svc_rec *s) {
@@ -99,7 +109,9 @@ int svc_stop(const char *qname) {
     return 0;
 }
 
-int svc_start(const char *qname) {
+/* manual: started by the user. A service that hit the restart limit gets
+ * one more run; svcmgr clears the count if it stays up for SVC_STABLE_SEC. */
+int svc_start_ex(const char *qname, int manual) {
     svc_rec s;
     pid_t pid;
     char logp[MAX_PATH], pidp[MAX_PATH];
@@ -112,8 +124,11 @@ int svc_start(const char *qname) {
     }
     if (svc_proc_ok(&s)) return 0;
     if (!svc_locked(qname) && svc_fails(qname) >= RESTART_LIMIT && !strcmp(s.mode, "restart")) {
-        log_msg("service %s disabled after %d restarts", qname, RESTART_LIMIT);
-        return 2;
+        if (!manual) {
+            log_msg("service %s disabled after %d restarts", qname, RESTART_LIMIT);
+            return 2;
+        }
+        log_msg("manual start of disabled service %s", qname);
     }
     svc_log_path(logp, sizeof(logp), qname);
     pid_path_for(pidp, sizeof(pidp), qname);
@@ -167,6 +182,10 @@ int svc_start(const char *qname) {
     return 0;
 }
 
+int svc_start(const char *qname) {
+    return svc_start_ex(qname, 0);
+}
+
 int svc_status(const char *qname) {
     svc_rec s;
     pid_t pid;
@@ -198,7 +217,8 @@ int cmd_service(int argc, char **argv) {
         for (i = 0; i < n; i++) {
             pid_t pid = svc_proc_ok(&list[i]) ? svc_pid(list[i].qname) : 0;
             const char *st = (pid > 0) ? "running" : "stopped";
-            if (!svc_locked(list[i].qname) && svc_fails(list[i].qname) >= RESTART_LIMIT) st = "failed";
+            if (pid <= 0 && !svc_locked(list[i].qname) && svc_fails(list[i].qname) >= RESTART_LIMIT)
+                st = "failed";
             printf("%s|%s|%s|%d\n", list[i].qname, list[i].mode, st, (int)pid);
         }
         free(list);
@@ -210,7 +230,7 @@ int cmd_service(int argc, char **argv) {
         return 1;
     }
     name = argv[1];
-    if (!strcmp(op, "start")) return svc_start(name);
+    if (!strcmp(op, "start")) return svc_start_ex(name, 1);
     if (!strcmp(op, "stop")) return svc_stop(name);
     if (!strcmp(op, "status")) return svc_status(name);
     fprintf(stderr, "unknown service op %s\n", op);
@@ -258,7 +278,13 @@ int cmd_svcmgr(void) {
         for (i = 0; i < n; i++) {
             if (!strcmp(list[i].mode, "once")) continue;
             if (svc_proc_ok(&list[i])) {
-                svc_set_fails(list[i].qname, 0);
+                /* A crash loop can look alive between two polls. Only a
+                 * process that stayed up clears the count. */
+                int f = svc_fails(list[i].qname);
+                if (f && proc_age_sec(svc_pid(list[i].qname)) >= SVC_STABLE_SEC) {
+                    if (f > RESTART_LIMIT) log_msg("service %s recovered", list[i].qname);
+                    svc_set_fails(list[i].qname, 0);
+                }
                 continue;
             }
             if (!strcmp(list[i].kind, "instance") && !framework_up()) continue;
@@ -271,6 +297,7 @@ int cmd_svcmgr(void) {
                     continue;
                 }
                 int f = svc_fails(list[i].qname) + 1;
+                if (f > RESTART_LIMIT + 1) continue;
                 svc_set_fails(list[i].qname, f);
                 if (f <= RESTART_LIMIT) {
                     log_msg("restart %s attempt %d", list[i].qname, f);
@@ -282,6 +309,61 @@ int cmd_svcmgr(void) {
         }
         free(list);
         sleep(2);
+    }
+}
+
+static void read_boot_id(char *out, size_t cap) {
+    FILE *f = fopen("/proc/sys/kernel/random/boot_id", "r");
+    out[0] = 0;
+    if (!f) return;
+    if (!fgets(out, (int)cap, f)) out[0] = 0;
+    fclose(f);
+    out[strcspn(out, "\n")] = 0;
+}
+
+/*
+ * One "Android up" event per boot. HMG's package manager clears
+ * sys.boot_completed for a moment during an install, so the value has to hold
+ * and the mark outlives both that dip and a watchdog restart.
+ */
+static void android_up_tick(void) {
+    static time_t since;
+    static int done;
+    struct timespec ts;
+    char id[64], seen[64];
+    FILE *f;
+    pid_t pid;
+    if (done) return;
+    if (!framework_up()) {
+        since = 0;
+        return;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    if (!since) since = ts.tv_sec;
+    if (ts.tv_sec - since < ANDROID_UP_SEC) return;
+    done = 1;
+    read_boot_id(id, sizeof(id));
+    seen[0] = 0;
+    f = fopen(ANDROID_UP_MARK, "r");
+    if (f) {
+        if (!fgets(seen, sizeof(seen), f)) seen[0] = 0;
+        fclose(f);
+        seen[strcspn(seen, "\n")] = 0;
+    }
+    if (id[0] && !strcmp(id, seen)) return;
+    f = fopen(ANDROID_UP_MARK, "w");
+    if (f) {
+        fprintf(f, "%s\n", id);
+        fclose(f);
+    }
+    log_msg("android up");
+    pid = fork();
+    if (pid == 0) {
+        alarm(30);
+        execl("/system/bin/am", "am", "broadcast", "-f", "32",
+              "-a", "com.nemesis.manager.ANDROID_UP",
+              "-n", MANAGER_EVENTS, (char *)NULL);
+        _exit(127);
     }
 }
 
@@ -327,6 +409,7 @@ int cmd_watchdog(void) {
                 }
                 if (pid > 0) write_pidfile(SM_PIDFILE, pid);
             }
+            android_up_tick();
             su_poll(su_fds, su_n, 2000);
         }
     }

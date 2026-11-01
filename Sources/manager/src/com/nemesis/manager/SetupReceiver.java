@@ -11,7 +11,8 @@ import android.os.SystemClock;
  * Waiting here for am start blocks the main thread, so the activity never
  * becomes idle and the launch times out. The shell is started and this
  * returns at once. A second start a second later covers the button's own
- * screen (Settings, for SETUP).
+ * screen (Settings, for SETUP). MainActivity re-fronts itself once if that
+ * screen still covers it (ButtonOpen).
  */
 public class SetupReceiver extends BroadcastReceiver {
     private static final String AM =
@@ -20,18 +21,27 @@ public class SetupReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
-        if (!Trigger.matches(context, intent.getAction())) return;
+        String action = intent.getAction();
+        if (!Trigger.matches(context, action)) return;
         long now = SystemClock.uptimeMillis();
-        boolean open;
+        boolean open, counted;
         synchronized (SetupReceiver.class) {
             SharedPreferences prefs = context.getSharedPreferences(
                     "setup_press", Context.MODE_PRIVATE);
             SetupPress presses = new SetupPress();
             presses.restore(prefs.getInt("count", 0), prefs.getLong("last", 0));
-            open = presses.note(now);
-            prefs.edit().putInt("count", presses.count()).putLong("last", presses.lastMs()).commit();
+            presses.restoreFamily(prefs.getBoolean("mobis", false));
+            int before = presses.count();
+            long last = presses.lastMs();
+            open = presses.note(now, action);
+            counted = open || presses.count() != before || presses.lastMs() != last;
+            prefs.edit().putInt("count", presses.count()).putLong("last", presses.lastMs())
+                    .putBoolean("mobis", presses.sawMobis()).commit();
         }
+        CrashLog.note("press.log", action + " t=" + now + (counted ? " counted" : " ignored")
+                + (open ? " open" : ""));
         if (!open) return;
+        ButtonOpen.mark();
         try {
             new ProcessBuilder(
                     "/system/xbin/nemesis", "root", "-c",

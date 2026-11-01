@@ -2,7 +2,7 @@
 
 Own your car, to its fullest.
 
-App store is coming soon at [NEMESIS Website, where Discord link is also available](https://xwtk.cloud/services/nemesis).
+Browse and download packages in the [NEMESIS Package Store](https://xwtk.cloud/services/nemesis#package-store). The [NEMESIS website](https://xwtk.cloud/services/nemesis) also has the Discord link.
 
 ### **Support NEMESIS development and research**
 
@@ -57,6 +57,18 @@ Most likely nothing, NEMESIS won't install.
 | 5 | Navigate to Engineering Mode (use web to search on how to do so), open USB Copy, select Update DSP |
 | 6 | Tap on Update OTA (existence of this doesn't mean your car has OTA support), if you see a loading animation come up on the status bar in the top right, everything is going as planned. Wait for installation to complete and the HU to restart. |
 
+## **Changelog**
+
+### 1.16
+
+- **Package Store.** Manager has a Package Store with an online tab (xwtk.Portal) and a USB tab (`type=list`). Rows are colored by compatibility with your OS version, car model and dependencies, and several packages can be installed in one go. The same store is on the [website](https://xwtk.cloud/services/nemesis#package-store), where packages from other publishers carry a Community badge.
+- **NEMESIS updater.** `nemesis update`, USB `type=update`, a manual check in Settings, and an hourly Update Monitor that does the 24 hour online check.
+- **Wipe.** `nemesis wipe --confirm` and a Wipe action in Manager, which asks twice.
+- **Package descriptors `version=1.1`.** New keys: `type`, `package-version`, `short-desc`, `os`, `models` and `depends`. `version=1.0` descriptors still work. A package cannot be uninstalled while another one depends on it.
+- **Manager.** New layout: My Packages, Package Store, Android Apps and Settings. Root certificates ship with it so HTTPS works on the unit.
+- **Fixes.** NEMESIS missing after a remote start, the Manager crash about `GET_TASKS` and after Close, the service staying disabled after repeated crashes, Manager opening on the first press, and Setup covering Manager after it opened.
+- **Self-hosted stores.** The store API is documented in [06 - Cloud Store API](06-Cloud-Store-API.md), so a fork can run its own.
+
 ## **Documentation**
 
 Read about NEMESIS, what it is exploiting, what it features, and its use manual.
@@ -68,8 +80,9 @@ Read about NEMESIS, what it is exploiting, what it features, and its use manual.
 | [03 - Install and uninstall](03-Install-and-Uninstall.md) | How NEMESIS is written onto `/system` and how it is removed. |
 | [04 - Packages](04-Packages.md) | Installable packages: metadata, layout, builder, lifecycle. |
 | [05 - Run scripts](05-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
+| [06 - Cloud Store API](06-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
 
-Documents **01** and **03** are the only ones that describe the DSP Update Agent path and on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **02**, **04**, and **05** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
+Documents **01** and **03** are the only ones that describe the DSP Update Agent path and on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **02**, **04**, **05** and **06** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
 
 
 Developed by Gor Mirzoyan (xwtk.cloud).

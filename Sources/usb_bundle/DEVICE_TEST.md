@@ -15,7 +15,7 @@ Stock apps are not modified. There is no All Apps tile.
 ## Build / verify (PC)
 
 ```bash
-cd /home/xwtk/nemesis
+cd path/to/nemesis   # the repository root (Sources/ in the published repo)
 make
 sh usb_bundle/validate_system_tools.sh
 sh usb_bundle/verify_tars.sh

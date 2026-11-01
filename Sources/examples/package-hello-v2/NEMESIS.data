@@ -1,8 +1,12 @@
 [nemesis]
-version=1.0
+version=1.1
 id=hello.tool
 name=Hello Tool
-types=application,service
+type=application,service
+package-version=2.0.0
+short-desc="Example package with an app and a service (v2)."
+os=any
+models=any
 preinstall=scripts/pre.sh
 postinstall=scripts/post.sh
 preuninstall=scripts/preun.sh

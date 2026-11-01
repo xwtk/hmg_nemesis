@@ -8,17 +8,64 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
         <include layout="@layout/title_bar" />
-        <ListView
-            android:id="@+id/list"
+        <LinearLayout
+            android:orientation="horizontal"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:divider="@drawable/co_bg_list_line"
-            android:dividerHeight="1dp"
-            android:listSelector="@drawable/co_list_selector"
-            android:choiceMode="singleChoice"
-            android:cacheColorHint="#00000000"
-            android:paddingTop="6dp" />
+            android:layout_weight="1">
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+                <TextView
+                    android:text="@string/my_packages"
+                    android:textSize="24sp"
+                    android:textColor="#ffb6c1c8"
+                    android:gravity="center_vertical"
+                    android:paddingLeft="22dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp" />
+                <TextView
+                    android:id="@+id/empty"
+                    android:text="@string/empty_packages"
+                    android:textSize="22sp"
+                    android:textColor="#ff62797f"
+                    android:gravity="center"
+                    android:visibility="gone"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+                <ListView
+                    android:id="@+id/list"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:divider="@drawable/co_bg_list_line"
+                    android:dividerHeight="1dp"
+                    android:listSelector="@drawable/co_list_selector"
+                    android:cacheColorHint="#00000000" />
+            </LinearLayout>
+            <View
+                android:background="#ff3a4347"
+                android:layout_width="1dp"
+                android:layout_height="match_parent" />
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="2">
+                <com.nemesis.manager.IconPager
+                    android:id="@+id/pager"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+                <LinearLayout
+                    android:id="@+id/page_dots"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
     <ImageView
         android:layout_width="match_parent"

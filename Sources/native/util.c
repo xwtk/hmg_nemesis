@@ -103,6 +103,9 @@ int ensure_dirs(void) {
     mkdir_p(NEMESIS_APPS, 0755);
     mkdir_p(NEMESIS_TMP, 0755);
     mkdir_p(NEMESIS_LOGS, 0755);
+    /* The Manager runs as its own uid and records crashes here. */
+    mkdir_p(NEMESIS_LOGS "/manager", 0777);
+    chmod(NEMESIS_LOGS "/manager", 0777);
     mkdir_p(PIDS_DIR, 0755);
     mkdir_p(SESSION_DIR, 0755);
     mkdir_p(NEMESIS_BINDIR, 0755);
@@ -506,10 +509,50 @@ static unsigned long proc_starttime(pid_t pid) {
     return 0;
 }
 
+/* PIDs and start ticks repeat from boot to boot on this unit, so a pidfile
+ * left in /data can name an unrelated live process. A random token kept in
+ * tmpfs /dev changes on every boot and marks which boot wrote the file. */
+#define BOOT_TOKEN "/dev/.nemesis-boot"
+
+static int boot_token(char *out, size_t cap) {
+    char tmp[64], raw[16], b[40];
+    int fd, i, n;
+    if (cap < 33) return -1;
+    out[0] = 0;
+    if (read_file(BOOT_TOKEN, b, sizeof(b)) >= 32) {
+        for (i = 0; i < 32 && b[i] && b[i] != '\n'; i++) out[i] = b[i];
+        out[i] = 0;
+        if (i == 32) return 0;
+    }
+    fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) return -1;
+    n = (int)read(fd, raw, sizeof(raw));
+    close(fd);
+    if (n != (int)sizeof(raw)) return -1;
+    for (i = 0; i < 16; i++) snprintf(b + i * 2, 3, "%02x", (unsigned char)raw[i]);
+    b[32] = '\n';
+    b[33] = 0;
+    /* link() fails with EEXIST when another process won the race. */
+    snprintf(tmp, sizeof(tmp), "%s.%d", BOOT_TOKEN, (int)getpid());
+    if (write_file(tmp, b, 0644) == 0) {
+        if (link(tmp, BOOT_TOKEN) != 0 && errno != EEXIST) {
+            unlink(tmp);
+            return -1;
+        }
+        unlink(tmp);
+    }
+    if (read_file(BOOT_TOKEN, b, sizeof(b)) < 32) return -1;
+    for (i = 0; i < 32 && b[i] && b[i] != '\n'; i++) out[i] = b[i];
+    out[i] = 0;
+    return i == 32 ? 0 : -1;
+}
+
 int write_pidfile(const char *path, pid_t pid) {
-    char b[64];
+    char b[96], tok[40];
     unsigned long st = proc_starttime(pid);
-    if (st)
+    if (st && boot_token(tok, sizeof(tok)) == 0)
+        snprintf(b, sizeof(b), "%d %lu %s\n", (int)pid, st, tok);
+    else if (st)
         snprintf(b, sizeof(b), "%d %lu\n", (int)pid, st);
     else
         snprintf(b, sizeof(b), "%d\n", (int)pid);
@@ -517,25 +560,55 @@ int write_pidfile(const char *path, pid_t pid) {
 }
 
 pid_t read_pidfile(const char *path) {
-    char b[64];
+    char b[96];
     if (read_file(path, b, sizeof(b)) < 0) return 0;
     return (pid_t)atoi(b);
 }
 
 int pidfile_is(const char *path, const char *needle) {
-    char b[64], *sp;
+    char b[96], tok[40], *sp, *tp, *e;
     pid_t pid;
     unsigned long saved, now;
     if (read_file(path, b, sizeof(b)) < 0) return 0;
     pid = (pid_t)atoi(b);
+    /* A stale file can name the PID this process now has. */
+    if (pid == getpid()) return 0;
     if (!pid_alive(pid)) return 0;
     sp = strchr(b, ' ');
-    saved = (sp && sp[1]) ? strtoul(sp + 1, NULL, 10) : 0;
+    saved = (sp && sp[1]) ? strtoul(sp + 1, &e, 10) : 0;
+    tp = NULL;
+    if (saved) {
+        while (*e == ' ') e++;
+        if (*e && *e != '\n') {
+            tp = e;
+            while (*e && *e != '\n' && *e != ' ') e++;
+            *e = 0;
+        }
+    }
     now = proc_starttime(pid);
     if (saved && now && saved != now) return 0;
-    if (saved && now && saved == now) return 1;
+    if (tp && boot_token(tok, sizeof(tok)) == 0) {
+        if (strcmp(tp, tok)) return 0;
+        return saved == now;
+    }
+    /* Files without a token come from 1.15 or an earlier boot: the start
+     * time alone is not proof, the command line must match too. */
     if (!needle || !needle[0]) return 0;
     return proc_cmdline_has(pid, needle);
+}
+
+long proc_age_sec(pid_t pid) {
+    char b[64];
+    unsigned long st;
+    long hz;
+    double up;
+    if (pid <= 0 || !pid_alive(pid)) return -1;
+    st = proc_starttime(pid);
+    hz = sysconf(_SC_CLK_TCK);
+    if (!st || hz <= 0) return -1;
+    if (read_file("/proc/uptime", b, sizeof(b)) < 0) return -1;
+    up = strtod(b, NULL);
+    return (long)(up - (double)st / (double)hz);
 }
 
 int pidfile_lock(const char *path) {

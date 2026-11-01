@@ -4,9 +4,10 @@
 # Requires a user+mount namespace (unshare). Does not touch the host /system.
 set -euo pipefail
 
-ROOT=/home/xwtk/nemesis
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ADB_PKG=$ROOT/packages/adb-tcp
 WIFI_PKG=$ROOT/packages/wireless-projection
+TOGGLE_PKG=$ROOT/examples/adb-toggle/package
 
 if [ "${NEMESIS_HOOK_NS:-}" != 1 ]; then
     if ! command -v unshare >/dev/null 2>&1; then
@@ -25,19 +26,20 @@ if [ "${NEMESIS_HOOK_NS:-}" != 1 ]; then
     fi
     NEMESIS_PYLIB=$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["stdlib"])')
     NEMESIS_ROOTFS=$(mktemp -d /tmp/nemesis-rootfs.XXXXXX)
-    export NEMESIS_HOOK_NS HOOK_SH NEMESIS_PYLIB NEMESIS_ROOTFS
+    NEMESIS_ROOT=$ROOT
+    export NEMESIS_HOOK_NS HOOK_SH NEMESIS_PYLIB NEMESIS_ROOTFS NEMESIS_ROOT
     set +e
     unshare --user --map-root-user --mount bash -c '
         set -euo pipefail
         r="$NEMESIS_ROOTFS/r"
         pylib="$NEMESIS_PYLIB"
         mkdir -p "$r/usr/bin" "$r/usr/lib64" "$r/usr/lib/x86_64-linux-gnu" "$r$pylib" \
-            "$r/dev" "$r/system" "$r/data" "$r/tmp" "$r/home/xwtk" "$r/etc"
+            "$r/dev" "$r/system" "$r/data" "$r/tmp" "$r$NEMESIS_ROOT" "$r/etc"
         mount --bind /usr/bin "$r/usr/bin"
         mount --bind /usr/lib64 "$r/usr/lib64"
         mount --bind /usr/lib/x86_64-linux-gnu "$r/usr/lib/x86_64-linux-gnu"
         mount --bind "$pylib" "$r$pylib"
-        mount --bind /home/xwtk "$r/home/xwtk"
+        mount --bind "$NEMESIS_ROOT" "$r$NEMESIS_ROOT"
         for n in null zero urandom random tty; do
             if [ -e "/dev/$n" ]; then
                 touch "$r/dev/$n"
@@ -51,7 +53,7 @@ if [ "${NEMESIS_HOOK_NS:-}" != 1 ]; then
             cp /etc/ld.so.cache "$r/etc/ld.so.cache"
         fi
         printf "%s\n" private > "$r/.nemesis-hook-private"
-        chroot "$r" /bin/bash /home/xwtk/nemesis/tests/pkg_live_snapshot.sh
+        chroot "$r" /bin/bash "$NEMESIS_ROOT/tests/pkg_live_snapshot.sh"
     '
     status=$?
     set -e
@@ -487,6 +489,104 @@ assert_cmp /system/onebin/neev23_us/featurexml.cfg "$FAKE/orig/D/neev.cfg"
 assert_cmp /system/onebin/cvev_us/featurexml.cfg "$FAKE/orig/D/featurexml.cfg"
 assert_restored D no freq none 0
 echo "scenario D ok"
+
+# E: factory CRLF in featurexml.cfg — wireless lines must still be commented.
+seed_unit no no none 0 E
+mkdir -p /system/onebin/crlf_us
+{
+    printf '%s\r\n' '# note androidauto_wireless.xml stays a comment'
+    printf '%s\r\n' '-/system/etc/permissions/com.hkmc.software.connectivity.androidauto_wireless.xml'
+    printf '%s\r\n' '-/system/etc/permissions/com.hkmc.software.connectivity.carplay_wireless.xml'
+    printf '%s\r\n' 'keep_this=1'
+} > /system/onebin/crlf_us/featurexml.cfg
+cp -a /system/onebin/crlf_us/featurexml.cfg "$FAKE/orig/E/featurexml.crlf.cfg"
+ln -sfn "$FAKE/orig/E" "$FAKE/orig/current"
+run_hook "$WIFI_PKG" pre.sh
+run_hook "$WIFI_PKG" post.sh
+grep -q $'^#-/system/etc/permissions/com.hkmc.software.connectivity.androidauto_wireless.xml\r$' \
+    /system/onebin/crlf_us/featurexml.cfg \
+    || fail "CRLF featurexml: androidauto line not commented"
+grep -q $'^#-/system/etc/permissions/com.hkmc.software.connectivity.carplay_wireless.xml\r$' \
+    /system/onebin/crlf_us/featurexml.cfg \
+    || fail "CRLF featurexml: carplay line not commented"
+grep -q $'^keep_this=1\r$' /system/onebin/crlf_us/featurexml.cfg \
+    || fail "CRLF featurexml: untouched line bytes changed"
+uninstall_wireless
+assert_cmp /system/onebin/crlf_us/featurexml.cfg "$FAKE/orig/E/featurexml.crlf.cfg"
+echo "scenario E ok"
+
+# adb.toggle: enable/disable on demand through adbctl.sh (no reboot, no install-time change).
+toggle_ctl() {
+    local out="$FAKE/ctl.out"
+    TOGGLE_RC=0
+    ( "$HOOK_SH" /data/nemesis/apps/adb.toggle/bin/adbctl.sh "$@" ) >"$out" 2>&1 || TOGGLE_RC=$?
+}
+seed_toggle() {
+    seed_unit "$1" "$2" none 0 "$3"
+    ln -sfn "$FAKE/orig/$3" "$FAKE/orig/current"
+    mkdir -p /data/nemesis/apps
+    cp -a "$TOGGLE_PKG" /data/nemesis/apps/adb.toggle
+    run_hook "$TOGGLE_PKG" pre.sh
+    run_hook "$TOGGLE_PKG" post.sh
+    assert_cmp /system/build.prop "$FAKE/orig/$3/build.prop"
+}
+
+# F: enable, enable again, disable. Hide XML present on the unit.
+seed_toggle freq yes F
+[ "$(reboot_count)" -eq 0 ] || fail "toggle install rebooted"
+toggle_ctl enable
+[ "$TOGGLE_RC" -eq 0 ] || fail "toggle enable rc=$TOGGLE_RC: $(cat "$FAKE/ctl.out")"
+assert_grep '^state=enabled$' "$FAKE/ctl.out"
+assert_grep '^ro.adb.secure=0$' /system/build.prop
+assert_grep '^persist.service.adb.tcp.enable=1$' /system/build.prop
+assert_grep '^service.adb.tcp.port=5555$' /system/build.prop
+assert_grep '^ro.keep=1$' /system/build.prop
+assert_gone /system/etc/permissions/com.hkmc.software.engineermode.adb_hide.xml
+assert_grep '^1$' /data/property/persist.service.adb.tcp.enable
+assert_grep '^5555$' /data/property/service.adb.tcp.port
+assert_grep 'LIVE-HIDE-UNIQUE-9f3a' /data/nemesis/backup/adb.toggle/adb_hide.xml
+[ "$(reboot_count)" -eq 0 ] || fail "toggle enable rebooted"
+toggle_ctl enable
+[ "$TOGGLE_RC" -eq 0 ] || fail "second enable rc=$TOGGLE_RC"
+assert_grep 'LIVE-HIDE-UNIQUE-9f3a' /data/nemesis/backup/adb.toggle/adb_hide.xml
+assert_grep '^ro.adb.secure=1$' /data/nemesis/backup/adb.toggle/build.prop
+toggle_ctl status
+assert_grep '^state=enabled$' "$FAKE/ctl.out"
+toggle_ctl disable
+[ "$TOGGLE_RC" -eq 0 ] || fail "toggle disable rc=$TOGGLE_RC: $(cat "$FAKE/ctl.out")"
+assert_grep '^state=disabled$' "$FAKE/ctl.out"
+assert_cmp /system/build.prop "$FAKE/orig/F/build.prop"
+assert_cmp /system/etc/permissions/com.hkmc.software.engineermode.adb_hide.xml "$FAKE/orig/F/hide.xml"
+assert_gone /data/property/persist.service.adb.tcp.enable
+assert_gone /data/nemesis/backup/adb.toggle
+toggle_ctl disable
+[ "$TOGGLE_RC" -eq 0 ] || fail "disable when disabled rc=$TOGGLE_RC"
+toggle_ctl reboot
+[ "$(reboot_count)" -eq 1 ] || fail "adbctl reboot did not call reboot"
+echo "scenario F ok"
+
+# G: uninstall while enabled restores; hide XML was absent. adb.tcp present blocks disable.
+seed_toggle none no G
+toggle_ctl enable
+[ "$TOGGLE_RC" -eq 0 ] || fail "G enable rc=$TOGGLE_RC"
+run_hook "$TOGGLE_PKG" preun.sh
+assert_cmp /system/build.prop "$FAKE/orig/G/build.prop"
+assert_gone /system/etc/permissions/com.hkmc.software.engineermode.adb_hide.xml
+assert_gone /data/nemesis/backup/adb.toggle
+seed_toggle none yes H
+run_hook "$ADB_PKG" pre.sh
+run_hook "$ADB_PKG" post.sh
+cp -a /system/build.prop "$FAKE/orig/H/after_tcp"
+toggle_ctl enable
+[ "$TOGGLE_RC" -eq 0 ] || fail "H enable rc=$TOGGLE_RC"
+assert_grep '^state=enabled-by-adb.tcp$' "$FAKE/ctl.out"
+assert_gone /data/nemesis/backup/adb.toggle
+toggle_ctl disable
+[ "$TOGGLE_RC" -ne 0 ] || fail "disable must refuse while adb.tcp owns the edits"
+assert_cmp /system/build.prop "$FAKE/orig/H/after_tcp"
+uninstall_adb
+assert_cmp /system/build.prop "$FAKE/orig/H/build.prop"
+echo "scenario toggle ok"
 
 # preinstall fails when build.prop is missing
 rm -f /system/build.prop

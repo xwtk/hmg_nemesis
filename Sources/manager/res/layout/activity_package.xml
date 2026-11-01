@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="@drawable/co_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <include layout="@layout/title_bar" />
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:paddingLeft="22dp"
+            android:paddingRight="22dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="10dp">
+            <TextView
+                android:id="@+id/log_text"
+                android:textSize="24sp"
+                android:textColor="#ffb6c1c8"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/loading" />
+        </ScrollView>
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/co_bg_bottom"
+            android:layout_width="match_parent"
+            android:layout_height="60dp">
+            <Button
+                android:id="@+id/btn_a"
+                android:layout_width="wrap_content"
+                android:layout_height="60dp"
+                android:minWidth="120dp"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:paddingLeft="18dp"
+                android:paddingRight="18dp"
+                android:layout_marginRight="8dp" />
+            <Button
+                android:id="@+id/btn_b"
+                android:layout_width="wrap_content"
+                android:layout_height="60dp"
+                android:minWidth="120dp"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:paddingLeft="18dp"
+                android:paddingRight="18dp" />
+        </LinearLayout>
+    </LinearLayout>
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="60dp"
+        android:src="@drawable/title_bar_below_shadow_image" />
+</FrameLayout>

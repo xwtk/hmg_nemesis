@@ -12,6 +12,9 @@ public class SetupPressRun {
         secondTripleOpensAgain();
         countSurvivesANewProcess();
         samePressDoesNotCountTwice();
+        lateEchoOfOtherFamilyIgnored();
+        hkmcOnlyUnitStillCounts();
+        echoInsideDebounceIgnored();
         if (failed != 0) {
             System.err.println("FAIL: " + failed + " setup-press checks");
             System.exit(1);
@@ -74,6 +77,33 @@ public class SetupPressRun {
         check(p.count() == 1, "still one after the echo");
         check(!p.note(10400), "second press");
         check(p.note(10800), "third press opens");
+    }
+
+    private static final String M = "mobis.intent.action.SHORTCUT_SETUP";
+    private static final String H = "com.hkmc.intent.action.SETUP_SHORTCUT";
+
+    private static void lateEchoOfOtherFamilyIgnored() {
+        SetupPress p = new SetupPress();
+        check(!p.note(10000, M), "mobis press");
+        check(!p.note(10600, H), "hkmc echo 600 ms later is ignored");
+        check(p.count() == 1, "one press after a late echo");
+        check(!p.note(10700, M), "second mobis press");
+        check(!p.note(11300, H), "echo again");
+        check(p.note(11400, M), "third mobis press opens");
+    }
+
+    private static void hkmcOnlyUnitStillCounts() {
+        SetupPress p = new SetupPress();
+        check(!p.note(0, H), "hkmc one");
+        check(!p.note(500, H), "hkmc two");
+        check(p.note(1000, H), "hkmc three opens when no mobis was seen");
+    }
+
+    private static void echoInsideDebounceIgnored() {
+        SetupPress p = new SetupPress();
+        check(!p.note(10000), "press");
+        check(!p.note(10000 + SetupPress.DEBOUNCE_MS - 1), "echo inside the debounce");
+        check(p.count() == 1, "debounce keeps one");
     }
 
     private static void check(boolean cond, String msg) {

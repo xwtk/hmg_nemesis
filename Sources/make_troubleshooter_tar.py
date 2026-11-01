@@ -13,6 +13,7 @@ shell header, then raw ELF + Manager APK. Does not patch any stock APK.
 from __future__ import annotations
 
 import io
+import re
 import tarfile
 from pathlib import Path
 
@@ -28,10 +29,29 @@ ELF_PATH = ROOT / "native" / "nemesis"
 APK_PATH = ROOT / "manager" / "NEMESIS.apk"
 RECOVERY_PATH = ROOT / "boot" / "install-recovery.sh"
 QB_HOOK_PATH = ROOT / "boot" / "qb_hook.sh"
+CACERTS_DIR = ROOT / "boot" / "cacerts"
+CA_RE = re.compile(r"^[0-9a-f]{8}\.\d$")
+
+
+def cacerts_heredocs() -> str:
+    """One heredoc per bundled root. PEM text has no 'CA_EOF' line."""
+    out = []
+    for p in sorted(CACERTS_DIR.iterdir()) if CACERTS_DIR.is_dir() else []:
+        if not CA_RE.match(p.name):
+            continue
+        text = p.read_text(encoding="ascii")
+        if "CA_EOF" in text:
+            raise SystemExit(f"{p} contains the heredoc marker")
+        if not text.endswith("\n"):
+            text += "\n"
+        out.append(f"cat > /data/nemesis/cacerts-new/{p.name} << 'CA_EOF'\n{text}CA_EOF\n")
+    if not out:
+        raise SystemExit(f"no root certificates in {CACERTS_DIR}; run tools/make_cacerts.py")
+    return "".join(out)
 
 
 def bootstrap_script(elf_skip: int, elf_len: int, apk_skip: int, apk_len: int,
-                     recovery: str, qb_hook: str) -> str:
+                     recovery: str, qb_hook: str, cacerts: str) -> str:
     return f"""#!/system/bin/sh
 # execl'd from /storage/upgrade/troubleShooter during OTA MAP_PREPARE (before ota_info check).
 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
@@ -72,11 +92,15 @@ mount -o remount,rw /system 2>&1 || mount -o rw,remount / 2>&1
 
 kill_pidfile() {{
     _pf="$1"
-    if [ -f "$_pf" ]; then
-        kill -TERM $(cat "$_pf") 2>/dev/null || true
-        sleep 1
-        kill -KILL $(cat "$_pf") 2>/dev/null || true
-    fi
+    [ -f "$_pf" ] || return 0
+    # A pidfile is "pid starttime token". After a reboot the pid may be a stranger.
+    read _p _rest < "$_pf"
+    case "$_p" in ''|0|1|*[!0-9]*) return 0 ;; esac
+    grep -q nemesis "/proc/$_p/cmdline" 2>/dev/null || return 0
+    kill -TERM "$_p" 2>/dev/null || true
+    sleep 1
+    grep -q nemesis "/proc/$_p/cmdline" 2>/dev/null || return 0
+    kill -KILL "$_p" 2>/dev/null || true
 }}
 kill_pidfile /data/nemesis/watchdog.pid
 kill_pidfile /data/nemesis/svcmgr.pid
@@ -105,6 +129,12 @@ if [ -f /system/etc/qb_runtime.sh ] && ! grep -q NEMESIS_QB_HOOK /system/etc/qb_
 {qb_hook}
 QB_EOF
 fi
+
+# Root CAs for HTTPS: only the ones the unit lacks; owned-cacerts lists them.
+rm -rf /data/nemesis/cacerts-new
+mkdir -p /data/nemesis/cacerts-new
+{cacerts}/system/xbin/nemesis cacerts-install /data/nemesis/cacerts-new 2>&1 || true
+rm -rf /data/nemesis/cacerts-new
 
 sync
 
@@ -143,6 +173,7 @@ def main() -> None:
     if not qb_hook.endswith("\n"):
         qb_hook += "\n"
 
+    cacerts = cacerts_heredocs()
     elf = ELF_PATH.read_bytes()
     apk = APK_PATH.read_bytes()
 
@@ -151,7 +182,7 @@ def main() -> None:
     hdr = b""
     for _ in range(8):
         apk_skip = elf_skip + len(elf)
-        script = bootstrap_script(elf_skip, len(elf), apk_skip, len(apk), recovery, qb_hook)
+        script = bootstrap_script(elf_skip, len(elf), apk_skip, len(apk), recovery, qb_hook, cacerts)
         hdr = script.encode("utf-8")
         if not hdr.endswith(b"\n"):
             hdr += b"\n"
@@ -179,7 +210,7 @@ def main() -> None:
     print(f"Wrote {OUT} ({OUT.stat().st_size} bytes) -> /storage/upgrade/{MEMBER}")
     print(f"  also {alias}")
     print(f"  header {len(hdr)}  elf {len(elf)}  apk {len(apk)}")
-    print("  install: /system/xbin/nemesis (04755), NEMESIS.apk, watchdog hook (no stock APK patch)")
+    print("  install: /system/xbin/nemesis (04755), NEMESIS.apk, watchdog hook, root CAs (no stock APK patch)")
     print()
     print("Flash: ota_package_troubleshooter.tar (or ota_package.tar) -> DSP OTA")
 

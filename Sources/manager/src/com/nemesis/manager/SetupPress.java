@@ -5,14 +5,20 @@ package com.nemesis.manager;
 final class SetupPress {
     static final long GAP_MS = 1500;
     /** ModeManager and PhoneWindowManager can both announce one press. */
-    static final long DEBOUNCE_MS = 200;
+    static final long DEBOUNCE_MS = 300;
     static final int NEED = 3;
     private int count;
     private long lastMs;
+    /** Once a mobis.* broadcast has been seen, com.hkmc.* ones are echoes. */
+    private boolean sawMobis;
 
     void restore(int count, long lastMs) {
         this.count = count;
         this.lastMs = lastMs;
+    }
+
+    void restoreFamily(boolean sawMobis) {
+        this.sawMobis = sawMobis;
     }
 
     int count() {
@@ -21,6 +27,19 @@ final class SetupPress {
 
     long lastMs() {
         return lastMs;
+    }
+
+    boolean sawMobis() {
+        return sawMobis;
+    }
+
+    /** One action family per press: mobis.* when the unit sends it,
+     *  com.hkmc.* only on units that never do. */
+    boolean note(long now, String action) {
+        boolean mobis = action != null && action.startsWith("mobis.");
+        if (!mobis && sawMobis) return false;
+        if (mobis) sawMobis = true;
+        return note(now);
     }
 
     boolean note(long now) {

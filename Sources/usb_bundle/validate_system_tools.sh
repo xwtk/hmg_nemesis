@@ -4,8 +4,8 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 SYS="${ROOT}/system.ext4"
-if [ ! -f "$SYS" ]; then
-    SYS=/home/xwtk/EV6_260507/system.ext4
+if [ ! -f "$SYS" ] && [ -n "${SYSTEM_EXT4:-}" ]; then
+    SYS=$SYSTEM_EXT4
 fi
 NEMESIS="${ROOT}/native/nemesis"
 

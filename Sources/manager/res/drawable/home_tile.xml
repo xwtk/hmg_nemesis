@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Setup grid_selector, night set: the tile behind each home icon. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true" android:drawable="@drawable/home_tile_push" />
+    <item android:drawable="@drawable/home_tile_nor" />
+</selector>

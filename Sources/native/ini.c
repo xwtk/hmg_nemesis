@@ -24,35 +24,99 @@ static int ini_add(ini_file *ini, const char *sec, const char *key, const char *
     return 0;
 }
 
+static int ini_fail(ini_file *ini, int line, const char *msg) {
+    free(ini->items);
+    ini->items = NULL;
+    ini->n = ini->cap = 0;
+    snprintf(ini->err, sizeof(ini->err), "line %d: %s", line, msg);
+    return -1;
+}
+
+/*
+ * Line based key=value parser. A value that starts with '"' runs to the next
+ * unescaped '"' and may span lines; inside it \" and \\ are escapes, CRLF and
+ * lone CR become LF. Unquoted values are taken as-is up to the end of line.
+ */
 int ini_load_mem(ini_file *ini, const char *text) {
     char sec[80];
     const char *p = text ? text : "";
+    int lineno = 1;
     memset(ini, 0, sizeof(*ini));
     sec[0] = 0;
     while (*p) {
-        char line[MAX_LINE];
+        char key[MAX_LINE];
+        char val[sizeof(((ini_kv *)0)->val)];
         size_t i = 0;
-        while (*p && *p != '\n' && i + 1 < sizeof(line)) line[i++] = *p++;
-        line[i] = 0;
-        if (*p == '\n') p++;
-        ini_trim(line);
-        if (!line[0] || line[0] == '#' || line[0] == ';') continue;
-        if (line[0] == '[') {
-            char *end = strchr(line, ']');
-            if (!end) continue;
-            *end = 0;
-            snprintf(sec, sizeof(sec), "%s", line + 1);
-            ini_trim(sec);
+        int start_line = lineno;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '\r' || *p == '\n') {
+            if (*p == '\r' && p[1] == '\n') p++;
+            p++;
+            lineno++;
             continue;
         }
-        {
-            char *eq = strchr(line, '=');
-            if (!eq) continue;
-            *eq = 0;
-            ini_trim(line);
-            ini_trim(eq + 1);
-            if (ini_add(ini, sec, line, eq + 1) != 0) return -1;
+        if (*p == '#' || *p == ';' || *p == '[') {
+            char line[MAX_LINE];
+            while (*p && *p != '\n' && *p != '\r') {
+                if (i + 1 < sizeof(line)) line[i++] = *p;
+                p++;
+            }
+            line[i] = 0;
+            if (line[0] == '[') {
+                char *end = strchr(line, ']');
+                if (end) {
+                    *end = 0;
+                    snprintf(sec, sizeof(sec), "%s", line + 1);
+                    ini_trim(sec);
+                }
+            }
+            continue;
         }
+        while (*p && *p != '=' && *p != '\n' && *p != '\r') {
+            if (i + 1 < sizeof(key)) key[i++] = *p;
+            p++;
+        }
+        key[i] = 0;
+        if (*p != '=') continue;
+        p++;
+        ini_trim(key);
+        while (*p == ' ' || *p == '\t') p++;
+        i = 0;
+        if (*p == '"') {
+            p++;
+            for (;;) {
+                char c = *p;
+                if (!c) {
+                    return ini_fail(ini, start_line, "unterminated quoted value");
+                }
+                p++;
+                if (c == '"') break;
+                if (c == '\\' && (*p == '"' || *p == '\\')) c = *p++;
+                else if (c == '\r') {
+                    if (*p == '\n') p++;
+                    c = '\n';
+                    lineno++;
+                } else if (c == '\n') lineno++;
+                if (i + 1 >= sizeof(val)) {
+                    return ini_fail(ini, start_line, "value too long");
+                }
+                val[i++] = c;
+            }
+            val[i] = 0;
+            /* anything after the closing quote up to EOL is ignored */
+            while (*p && *p != '\n' && *p != '\r') p++;
+        } else {
+            while (*p && *p != '\n' && *p != '\r') {
+                if (i + 1 >= sizeof(val)) {
+                    return ini_fail(ini, start_line, "value too long");
+                }
+                val[i++] = *p++;
+            }
+            val[i] = 0;
+            ini_trim(val);
+        }
+        if (!key[0]) continue;
+        if (ini_add(ini, sec, key, val) != 0) return -1;
     }
     return 0;
 }

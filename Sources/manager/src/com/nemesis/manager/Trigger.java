@@ -3,7 +3,7 @@ package com.nemesis.manager;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/** Options offers Setup and Navigation. A new install uses Navigation. */
+/** Settings offers Setup and Navigation. A new install uses Navigation. */
 final class Trigger {
     static final String PREFIX = "mobis.intent.action.";
     private static final String PREFS = "nemesis_options";
@@ -26,7 +26,7 @@ final class Trigger {
         return new String[] { PREFIX + suffix, extra };
     }
 
-    /** Order is the Options list. */
+    /** Order is the Settings picker list. */
     static final Item[] ALL = new Item[] {
             new Item("SHORTCUT_SETUP", "Setup",
                     also("SHORTCUT_SETUP", "com.hkmc.intent.action.SETUP_SHORTCUT")),
@@ -69,6 +69,6 @@ final class Trigger {
         ed.putString(KEY, suffix);
         ed.commit();
         c.getSharedPreferences("setup_press", Context.MODE_PRIVATE)
-                .edit().putInt("count", 0).putLong("last", 0).commit();
+                .edit().putInt("count", 0).putLong("last", 0).putBoolean("mobis", false).commit();
     }
 }

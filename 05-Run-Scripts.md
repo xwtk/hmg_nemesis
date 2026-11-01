@@ -13,7 +13,7 @@ This document assumes NEMESIS is already on the unit.
 | **`NEMESIS.data`** | INI descriptor. The USB Handler **only** reacts to this file. |
 | **`NEMESIS.sh`** (or any relative path you name in `path=`) | The script. Ignored by the Handler unless `type=execute` points at it. |
 
-A stick with only `NEMESIS.sh` does **nothing** on insert. Manager can still run `/storage/usb0/NEMESIS.sh` from **Run USB NEMESIS.sh** once Manager is open.
+A stick with only `NEMESIS.sh` does **nothing** on insert.
 
 ---
 
@@ -28,17 +28,21 @@ The Handler is the locked `usb-handler` service. It loops:
 
 `type` values:
 
-| `type` | `path` | Android up | Android down |
+| `type` | `path` | Android up | Android down, with `NEMESIS.emergency` |
 |--------|--------|------------|----------------|
 | `execute` | required, relative | Yes/No, then run the script as root, cwd = USB root | **Runs without a dialog** (recovery) |
 | `install` | required, relative zip | Yes/No, then `nemesis install` | **Installs without a dialog** |
+| `update` | required, relative zip | Yes/No, then `nemesis update`. Same or older than the running core: a message, no prompt. | **Updates without a dialog** |
 | `open` | optional | Starts Manager | Skipped (no UI) |
+| `list` | not used | Opens the Package Store on the stick's list | Waits for Android |
 
 Anything else → “Invalid package descriptor”.
 
+**Android down.** The Handler acts only if the stick root also has a file named `NEMESIS.emergency`. Its contents do not matter. Without it, the stick waits until Android comes up and is then prompted as usual, so a stick left plugged in does not run again on the next boot. A recovery stick made for 1.15 needs this file added, or it does nothing on a unit whose Android will not start. `examples/usb-stick-recover-buildprop/` has it.
+
 `path` rules (rejected as invalid):
 
-- must not be empty for execute/install
+- must not be empty for execute/install/update
 - must not start with `/`
 - must not contain `..`
 - must not contain `; | & \` $ ' " newlines ` ( ) < >`
@@ -49,19 +53,7 @@ Timeout for a Yes/No dialog: **60 seconds**. Unplugging the stick cancels the wa
 
 ---
 
-## 3. Manual run from Manager
-
-Menu **Run USB NEMESIS.sh** always executes:
-
-```text
-/system/bin/sh /storage/usb0/NEMESIS.sh
-```
-
-through the privileged CLI (`nemesis root -c …`). That path is **usb0** only. It does not read `NEMESIS.data`. Use this when you already have Manager open and a script named exactly `NEMESIS.sh` on the stick.
-
----
-
-## 4. `type=execute` descriptor
+## 3. `type=execute` descriptor
 
 USB root example (`examples/usb-stick-execute/`):
 
@@ -81,7 +73,7 @@ path=NEMESIS.sh
 
 `path` can be another relative name (`scripts/diag.sh`) as long as the file exists on the stick.
 
-When Android is up, the dialog asks whether to execute the compatible item on the USB drive. **Yes** runs the script; **No** skips. When Android is down, the Handler logs `android down; auto-confirm` and runs it (so a stick can recover a unit that is not showing UI).
+When Android is up, the dialog asks whether to execute the compatible item on the USB drive. **Yes** runs the script; **No** skips. When Android is down and the stick has `NEMESIS.emergency`, the Handler logs `android down; auto-confirm` and runs it, so a stick can recover a unit that is not showing UI. Without that file, the script waits for Android and then gets the dialog.
 
 The script is started as:
 
@@ -93,7 +85,7 @@ with **cwd = USB root** and **uid root**. Exit code 0 → success dialog (if And
 
 ---
 
-## 5. How to write `NEMESIS.sh`
+## 4. How to write `NEMESIS.sh`
 
 KitKat toolbox only:
 
@@ -122,24 +114,27 @@ exit 0
 
 ---
 
-## 6. Creating a stick — checklist
+## 5. Creating a stick — checklist
 
 **Execute (automatic on insert):**
 
 1. Format the stick so the HU mounts it as usb0 (usual USB layout for this unit).
 2. Write `NEMESIS.data` with `type=execute` and `path=NEMESIS.sh`.
 3. Write the script at that relative path; `chmod` is not required on VFAT.
-4. Insert. Confirm Yes if Android is up, or wait for the script if Android is down.
-5. To run the same job again, unplug, or replace/remove `NEMESIS.data` (the Handler re-arms on a new file identity).
+4. To recover a unit whose Android does not come up, also put an empty file named `NEMESIS.emergency` at the stick root. Remove it afterward.
+5. Insert. Confirm Yes if Android is up. If Android is down, the script runs only with `NEMESIS.emergency`.
+6. To run the same job again, unplug, or replace/remove `NEMESIS.data` (the Handler re-arms on a new file identity).
 
 **Open Manager only:** `type=open`, no script required ([02](02-Debugging-Execution-Interface.md)).
 
 **Install a zip:** `type=install` and `path=packages/foo.zip` ([04](04-Packages.md)).
 
-**Manager-only script:** file named `/storage/usb0/NEMESIS.sh`, open Manager with `type=open` (or `am start`), then **Run USB NEMESIS.sh**.
+**Update NEMESIS:** `type=update` and `path=` the update zip ([03](03-Install-and-Uninstall.md)).
+
+**Package list for the Store:** `type=list` ([04](04-Packages.md)).
 
 ---
 
-## 7. Logs
+## 6. Logs
 
 USB Handler lines go to `/data/nemesis/nemesis.log` and `/data/nemesis/logs/usb-session.log` (`handled type=execute path=... reply=yes|recovery|timeout|unmount`). Copy from Manager **Logs → Copy to USB** (`/storage/usb0/NEMESIS-logs`).

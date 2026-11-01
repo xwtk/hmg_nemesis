@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="@drawable/co_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:orientation="vertical"
+        android:focusableInTouchMode="true"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <include layout="@layout/title_bar" />
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="6dp"
+            android:layout_width="match_parent"
+            android:layout_height="66dp">
+            <Button
+                android:id="@+id/tab_usb"
+                android:text="@string/tab_usb"
+                android:textSize="21sp"
+                android:background="@drawable/co_bt_title"
+                android:minWidth="100dp"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp" />
+            <Button
+                android:id="@+id/tab_online"
+                android:text="@string/tab_online"
+                android:textSize="21sp"
+                android:background="@drawable/co_bt_title"
+                android:minWidth="100dp"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp" />
+            <EditText
+                android:id="@+id/search"
+                android:hint="@string/search_hint"
+                android:background="@drawable/search_bg"
+                android:textSize="21sp"
+                android:textColor="#ffb6c1c8"
+                android:textColorHint="#ff62797f"
+                android:singleLine="true"
+                android:inputType="text"
+                android:imeOptions="actionDone|flagNoExtractUi"
+                android:layout_marginLeft="12dp"
+                android:layout_marginRight="12dp"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1" />
+            <Button
+                android:id="@+id/show_all"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:visibility="gone"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp" />
+            <Button
+                android:id="@+id/sort_field"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:minWidth="100dp"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp" />
+            <Button
+                android:id="@+id/sort_dir"
+                android:textSize="24sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:minWidth="60dp"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp" />
+        </LinearLayout>
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/empty"
+                android:text="@string/empty_store"
+                android:textSize="22sp"
+                android:textColor="#ff62797f"
+                android:gravity="center"
+                android:visibility="gone"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+            <ListView
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@drawable/co_bg_list_line"
+                android:dividerHeight="1dp"
+                android:listSelector="@drawable/co_list_selector"
+                android:cacheColorHint="#00000000" />
+        </FrameLayout>
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/co_bg_bottom"
+            android:layout_width="match_parent"
+            android:layout_height="60dp">
+            <Button
+                android:id="@+id/btn_a"
+                android:text="@string/install"
+                android:layout_width="wrap_content"
+                android:layout_height="60dp"
+                android:minWidth="120dp"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:paddingLeft="18dp"
+                android:paddingRight="18dp"
+                android:layout_marginRight="8dp" />
+            <Button
+                android:id="@+id/btn_b"
+                android:text="@string/uninstall"
+                android:layout_width="wrap_content"
+                android:layout_height="60dp"
+                android:minWidth="120dp"
+                android:textSize="21sp"
+                android:textColor="@color/title_btn_text"
+                android:background="@drawable/co_bt_title"
+                android:paddingLeft="18dp"
+                android:paddingRight="18dp" />
+        </LinearLayout>
+    </LinearLayout>
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="60dp"
+        android:src="@drawable/title_bar_below_shadow_image" />
+</FrameLayout>

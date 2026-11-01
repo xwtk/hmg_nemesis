@@ -1,8 +1,12 @@
 [nemesis]
-version=1.0
+version=1.1
 id=usb-handler
 name=USB Handler
-types=service
+type=service
+package-version=1.16
+short-desc="Runs NEMESIS packages and scripts from a USB stick."
+os=any
+models=any
 
 [service.0]
 name=usb-handler
