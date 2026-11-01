@@ -82,7 +82,8 @@ public class StoreDetailActivity extends Activity {
             sb.append('\n').append(getString(R.string.installed_version).replace("%s", e.installed));
         }
         if (e.published.length() > 0) {
-            sb.append('\n').append(getString(R.string.published_on).replace("%s", e.published));
+            sb.append('\n').append(getString(R.string.published_on)
+                    .replace("%s", e.published.substring(0, Math.min(10, e.published.length()))));
         }
         String desc = e.detailedDesc.length() > 0 ? e.detailedDesc : e.shortDesc;
         if (desc.length() > 0) sb.append("\n\n").append(desc);
