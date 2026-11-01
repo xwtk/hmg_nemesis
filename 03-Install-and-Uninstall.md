@@ -134,6 +134,15 @@ An update replaces the core files without a DSP OTA. It comes from a stick (`typ
 /system/xbin/nemesis update /storage/usb0/nemesis-update-1.17.zip
 ```
 
+The `Update` folder in the repository is a ready stick: copy its two files to the root of the drive. `NEMESIS.data` there is only:
+
+```ini
+[nemesis]
+version=1.1
+type=update
+path=nemesis-1.16.1.zip
+```
+
 Build the zip on the PC:
 
 ```bash

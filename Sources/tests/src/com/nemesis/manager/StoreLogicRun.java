@@ -20,6 +20,7 @@ public class StoreLogicRun {
         searchMatchesNameAndDescription();
         defaultFilterHidesPartialAndNone();
         sorting();
+        dateSortsToTheSecond();
         if (failed != 0) {
             System.err.println("FAIL: " + failed + " store logic checks");
             System.exit(1);
@@ -36,6 +37,19 @@ public class StoreLogicRun {
         check(StoreList.hiddenCount(java.util.Collections.singletonList(old)) == 0, "legacy stays listed");
         old.compat = StoreList.NONE;
         check(StoreList.shade(old) == StoreList.NONE, "legacy keeps red");
+        check(UpdateRule.networkAllowed(false, 1, null), "Wi-Fi by default");
+        check(UpdateRule.networkAllowed(false, 7, "bnep0"), "Bluetooth hotspot by default");
+        check(UpdateRule.networkAllowed(false, 9, "usb0"), "USB hotspot by default");
+        check(UpdateRule.networkAllowed(false, -1, "rndis0"), "USB tether with no active type");
+        check(!UpdateRule.networkAllowed(false, 0, "usb0"), "mobile type is off, whatever the name");
+        check(!UpdateRule.networkAllowed(false, 5, "wlan0"), "hipri is off");
+        check(!UpdateRule.networkAllowed(false, -1, "rmnet0"), "SIM interface is off");
+        check(!UpdateRule.networkAllowed(false, -1, null), "no route is off");
+        check(UpdateRule.networkAllowed(true, 0, "rmnet0"), "Use Telematics Internet allows the SIM");
+        String routes = "Iface\tDestination\tGateway\nwlan0\t0001A8C0\t00000000\nrmnet0\t00000000\t0101A8C0\n";
+        check("rmnet0".equals(UpdateRule.defaultRouteIface(routes)), "default route interface");
+        check(UpdateRule.defaultRouteIface("Iface\tDestination\nwlan0\t0001A8C0\n") == null, "no default route");
+        check(UpdateRule.compare("1.16.1", "1.16") > 0, "1.16.1 is newer than 1.16");
         check(UpdateRule.compare("1.16", "1.15") > 0, "1.16 is newer than 1.15");
         check(UpdateRule.compare("1.9", "1.10") < 0, "numeric, not text");
         check(UpdateRule.compare("1.16", "1.16.0") == 0, "missing part is zero");
@@ -101,6 +115,15 @@ public class StoreLogicRun {
         e.published = date;
         e.compat = compat;
         return e;
+    }
+
+    private static void dateSortsToTheSecond() {
+        java.util.ArrayList<StoreList.Entry> all = new java.util.ArrayList<StoreList.Entry>();
+        all.add(row("A", "2026-11-01 10:00:05", StoreList.FULL));
+        all.add(row("B", "2026-11-01 10:00:09", StoreList.FULL));
+        all.add(row("C", "2026-11-01", StoreList.FULL));
+        java.util.List<StoreList.Entry> l = StoreList.view(all, "", true, true, false);
+        check("B".equals(l.get(0).name) && "A".equals(l.get(1).name) && "C".equals(l.get(2).name), "date sorts to the second, newest first");
     }
 
     private static void searchMatchesNameAndDescription() {

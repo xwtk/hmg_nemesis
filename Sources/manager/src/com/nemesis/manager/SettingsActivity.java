@@ -43,6 +43,8 @@ public class SettingsActivity extends Activity {
                     Trigger.label(this) + ". " + getString(R.string.trigger_hint), "trigger", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.auto_launch),
                     getString(R.string.auto_launch_sum), "auto", false));
+            rows.add(new TwoLineAdapter.Row(getString(R.string.use_telematics),
+                    getString(R.string.use_telematics_sum), "telematics", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.check_updates),
                     getString(R.string.title) + " " + Ui.versionName(this), "update", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.reboot),
@@ -57,7 +59,13 @@ public class SettingsActivity extends Activity {
                 rows.add(new TwoLineAdapter.Row(item.label, sum, item.suffix, false));
             }
         }
-        lv.setAdapter(new TwoLineAdapter(this, rows));
+        if (picking) {
+            lv.setAdapter(new TwoLineAdapter(this, rows));
+        } else {
+            ArrayList<String> checked = new ArrayList<String>();
+            if (Portal.useTelematics(this)) checked.add("telematics");
+            lv.setAdapter(new CheckAdapter(this, rows, checked));
+        }
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
                 if (pos < 0 || pos >= rows.size()) return;
@@ -81,6 +89,9 @@ public class SettingsActivity extends Activity {
             startActivity(i);
         } else if ("auto".equals(key)) {
             startActivity(new Intent(this, AppsActivity.class));
+        } else if ("telematics".equals(key)) {
+            Portal.setUseTelematics(this, !Portal.useTelematics(this));
+            bindList();
         } else if ("update".equals(key)) {
             Intent i = new Intent(this, DialogActivity.class);
             i.putExtra("nemesis_mode", "update_check");

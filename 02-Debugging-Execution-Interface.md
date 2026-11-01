@@ -82,7 +82,7 @@ The home screen has two columns. **My Packages** on the left scrolls vertically 
 | My Packages (tap a row) | Package details, Launch, Uninstall. Launch shows a message only if it fails. |
 | Package Store | Online and USB packages. Search, sort by date or name, compatibility colours, Install, Update, Uninstall. |
 | Android Apps | Installed Android apps. Ticks choose which apps start automatically after Android comes up. |
-| Settings | Trigger button, Auto-launch, Check for updates, Reboot, Wipe NEMESIS |
+| Settings | Trigger button, Auto-launch, Use Telematics Internet, Check for updates, Reboot, Wipe NEMESIS |
 | Services | List, Start, Stop (`<package-id>/<local-name>`) |
 | Logs | Last NEMESIS log; **Copy to USB** writes `/storage/usb0/NEMESIS-logs` |
 | Engineering Menu | Opens Engineering Mode |
@@ -110,7 +110,11 @@ The online tab reads the catalog from xwtk.Portal. If the portal cannot be reach
 
 The background check runs on the Update Monitor's hourly tick and only goes out if 24 hours have passed since the last successful check. If the clock is not yet sane (the unit reads 2015 until it has real time), elapsed time since boot is used. A failed background check is silent and is retried on the next tick. See [03 — Install and uninstall](03-Install-and-Uninstall.md) for what `nemesis update` does.
 
-### 3.3 Recovery with Android down
+### 3.3 Which connection Manager uses
+
+All of Manager's traffic (Store, downloads, update checks) goes through one check. By default it allows Wi-Fi and a USB or Bluetooth hotspot, and blocks the head unit's SIM connection. **Settings → Use Telematics Internet** lifts the block. A blocked attempt shows the usual connection popup and adds a line to `/data/nemesis/logs/manager/network.log` with the connection type and interface. The check goes by Android's connection type, then by the default route's interface: `wlan*`, `bnep*`, `usb*` and `rndis*` pass, anything else is blocked. It covers Manager only. A package's own network use is up to the package.
+
+### 3.4 Recovery with Android down
 
 NEMESIS was built to allow recovering the Android system in case it was corrupted by incorrect changes and services such as Zygote fail to run.
 

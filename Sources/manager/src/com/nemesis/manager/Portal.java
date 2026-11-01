@@ -1,6 +1,8 @@
 package com.nemesis.manager;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -36,6 +38,8 @@ import javax.net.ssl.X509TrustManager;
 /** xwtk.Portal over HTTPS. Endpoints are described in NEMESIS-API.md. */
 final class Portal {
     /** Placeholder: nothing resolves here until the real host is filled in. */
+    private static final String NET_PREFS = "network";
+    private static final String KEY_TELEMATICS = "use_telematics";
     static final String BASE_URL = "https://portal.xwtk.cloud/nemesis/v1";
     static final String PATH_UPDATE = "/update/latest";
     static final String PATH_CATALOG = "/store/catalog";
@@ -93,8 +97,52 @@ final class Portal {
         return URLEncoder.encode(s == null ? "" : s, "UTF-8");
     }
 
+    static boolean useTelematics(Context c) {
+        return c.getSharedPreferences(NET_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_TELEMATICS, false);
+    }
+
+    static void setUseTelematics(Context c, boolean on) {
+        c.getSharedPreferences(NET_PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_TELEMATICS, on).commit();
+    }
+
+    /** The one gate for all of Manager's traffic: Wi-Fi or a hotspot, or Use Telematics Internet. */
+    private static void checkNetwork(Context c) throws IOException {
+        if (useTelematics(c)) return;
+        int type = -1;
+        try {
+            NetworkInfo n = ((ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE))
+                    .getActiveNetworkInfo();
+            if (n != null && n.isConnected()) type = n.getType();
+        } catch (Throwable ignored) {
+        }
+        String iface = UpdateRule.defaultRouteIface(readRoutes());
+        if (UpdateRule.networkAllowed(false, type, iface)) return;
+        CrashLog.note("network.log", "blocked type=" + type + " iface=" + iface);
+        throw new IOException("blocked by network policy");
+    }
+
+    private static String readRoutes() {
+        try {
+            InputStream in = new java.io.FileInputStream("/proc/net/route");
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                return bos.toString("UTF-8");
+            } finally {
+                in.close();
+            }
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     private static HttpURLConnection open(Context c, String url) throws Exception {
         if (!url.startsWith("https://")) throw new IOException("not https: " + url);
+        checkNetwork(c);
         HttpsURLConnection h = (HttpsURLConnection) new URL(url).openConnection();
         h.setSSLSocketFactory(socketFactory(c));
         h.setConnectTimeout(CONNECT_MS);

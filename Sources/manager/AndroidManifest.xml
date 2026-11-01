@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.nemesis.manager"
-    android:versionCode="17"
-    android:versionName="1.16">
+    android:versionCode="18"
+    android:versionName="1.16.1">
     <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="19" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- HMG's ActivityManager checks GET_TASKS in finishActivity(). -->
     <uses-permission android:name="android.permission.GET_TASKS" />
     <application

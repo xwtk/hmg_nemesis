@@ -57,7 +57,21 @@ Most likely nothing, NEMESIS won't install.
 | 5 | Navigate to Engineering Mode (use web to search on how to do so), open USB Copy, select Update DSP |
 | 6 | Tap on Update OTA (existence of this doesn't mean your car has OTA support), if you see a loading animation come up on the status bar in the top right, everything is going as planned. Wait for installation to complete and the HU to restart. |
 
+## **Updating from 1.16**
+
+| **Step** | **Description** |
+|----------|-----------------|
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.1.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 2 | Insert the USB drive into the car's HU USB port with Android running. |
+| 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
+
+**Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal.
+
 ## **Changelog**
+
+### 1.16.1
+
+- **Network use.** Everything NEMESIS Manager does online now uses Wi-Fi or a USB or Bluetooth hotspot only. Turn on **Settings → Use Telematics Internet** to also allow the head unit's SIM connection.
 
 ### 1.16
 

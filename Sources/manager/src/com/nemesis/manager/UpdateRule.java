@@ -23,6 +23,31 @@ final class UpdateRule {
         return lastWall == 0 || nowWall < lastWall || nowWall - lastWall >= PERIOD_MS;
     }
 
+    /**
+     * May Manager use this connection? activeType is ConnectivityManager's, -1 for none.
+     * shortcut: interface names are not confirmed on a real unit and the SIM's type is
+     * unknown; adjust once network.log from a unit shows them.
+     */
+    static boolean networkAllowed(boolean telematics, int activeType, String routeIface) {
+        if (telematics) return true;
+        if (activeType == 1 || activeType == 7) return true; // Wi-Fi, Bluetooth tether
+        if (activeType == 0 || (activeType >= 2 && activeType <= 6)) return false; // mobile
+        if (routeIface == null) return false;
+        return routeIface.startsWith("wlan") || routeIface.startsWith("bnep")
+                || routeIface.startsWith("usb") || routeIface.startsWith("rndis");
+    }
+
+    /** The default route's interface in /proc/net/route text, or null. */
+    static String defaultRouteIface(String procNetRoute) {
+        if (procNetRoute == null) return null;
+        String[] lines = procNetRoute.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String[] f = lines[i].trim().split("\\s+");
+            if (f.length >= 2 && "00000000".equals(f[1])) return f[0];
+        }
+        return null;
+    }
+
     /** Dotted numeric compare, like native ver_cmp. */
     static int compare(String a, String b) {
         String[] x = (a == null ? "" : a.trim()).split("\\.");

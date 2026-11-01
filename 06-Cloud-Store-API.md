@@ -76,7 +76,7 @@ GET {BASE_URL}/store/catalog
       "id": "vendor.tool",
       "name": "Tool",
       "short-desc": "One line for the list",
-      "published": "2026-10-31",
+      "published": "2026-10-31 14:05:09",
       "package-version": "1.2",
       "os": "any",
       "models": "any",
@@ -91,7 +91,7 @@ GET {BASE_URL}/store/catalog
 - `id` is required. `name` falls back to `id`. `short-desc` and `published` may be empty.
 - `community` is a boolean. The web store shows a Community badge when it is `true`. xwtk.Portal sets it for packages from other publishers, and the owner of the store chooses it for their own. Missing means `false`.
 - `descriptor` is the package's `NEMESIS.data` `version`. The web store and Manager show anything below `1.1` in yellow with a warning that it may not be compatible. Missing means no warning.
-- Use `YYYY-MM-DD` for `published`, because sorting by date compares the text.
+- Use `YYYY-MM-DD HH:MM:SS` in UTC for `published`, because sorting by date compares the text. A plain `YYYY-MM-DD` still works, and sorts before any time on that day.
 - A reply without a `packages` array counts as unreachable.
 - Clients ignore keys they do not use. The Manager reads `package-version`, `os`, `models` and `type` from the descriptor, and the web page reads them from here to avoid one request per row.
 
@@ -124,7 +124,7 @@ The server also sends the fields below, which the web page shows under Details. 
 | `short-desc` | string | One line, at most 64 characters |
 | `detailed-desc` | string | Longer text, may be empty |
 | `type` | string | `tool`, `app`, and so on, copied from the package |
-| `published` | string | `YYYY-MM-DD` |
+| `published` | string | `YYYY-MM-DD HH:MM:SS`, UTC |
 | `size` | number | Zip size in bytes |
 | `repository` | string | Source URL from the package, may be empty |
 | `apps`, `services` | array of strings | What the package installs |
