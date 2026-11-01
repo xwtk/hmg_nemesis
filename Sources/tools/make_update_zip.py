@@ -34,6 +34,8 @@ def main() -> None:
     ap.add_argument("--apk", type=Path, default=ROOT / "manager" / "NEMESIS.apk")
     ap.add_argument("--recovery", type=Path, default=ROOT / "boot" / "install-recovery.sh")
     ap.add_argument("--qb-hook", type=Path, default=ROOT / "boot" / "qb_hook.sh")
+    ap.add_argument("--no-qb-hook", action="store_true",
+                    help="leave the hook as installed: 1.16 and 1.16.1 cannot rewrite it on real units")
     ap.add_argument("--cacerts", type=Path, default=ROOT / "boot" / "cacerts")
     ap.add_argument("--core-package", type=Path, action="append", default=[])
     ap.add_argument("--migrate", type=Path, default=None)
@@ -61,7 +63,7 @@ def main() -> None:
         files["core/NEMESIS.apk"] = args.apk.read_bytes()
     if args.recovery.is_file():
         files["core/install-recovery.sh"] = args.recovery.read_bytes()
-    if args.qb_hook.is_file():
+    if not args.no_qb_hook and args.qb_hook.is_file():
         hook = args.qb_hook.read_bytes()
         if b"NEMESIS_QB_HOOK" not in hook:
             raise SystemExit(f"{args.qb_hook} lacks the NEMESIS_QB_HOOK marker")

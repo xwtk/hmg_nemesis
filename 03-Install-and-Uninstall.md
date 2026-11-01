@@ -140,14 +140,16 @@ The `Update` folder in the repository is a ready stick: copy its two files to th
 [nemesis]
 version=1.1
 type=update
-path=nemesis-1.16.1.zip
+path=nemesis-1.16.2.zip
 ```
 
 Build the zip on the PC:
 
 ```bash
-python3 tools/make_update_zip.py -o nemesis-update-1.17.zip --version 1.17
+python3 tools/make_update_zip.py -o nemesis-update-1.17.zip --version 1.17 --no-qb-hook
 ```
+
+`--no-qb-hook` leaves out `core/qb_hook.sh`. An update runs the binary already on the unit, and on real units 1.16 and 1.16.1 fail when they rewrite the hook, so a zip meant for them must not carry it.
 
 The zip has `id=nemesis.core`, `type=update`, and a `package-version`. It holds `core/nemesis`, optionally `core/NEMESIS.apk`, `core/install-recovery.sh`, `core/qb_hook.sh`, `core/cacerts/`, `core-packages/*.zip`, and `scripts/migrate.sh`, plus an `MD5SUMS` that must list every file.
 

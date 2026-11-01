@@ -50,10 +50,10 @@ def main() -> None:
         text=True,
         errors="replace",
     )
-    if "(type 0x10)0x12" not in dump:
-        fail("Manager versionCode is not 18:\n" + dump[:800])
-    if 'versionName(0x0101021c)="1.16.1"' not in dump and '="1.16.1"' not in dump:
-        fail("Manager versionName is not 1.16.1:\n" + dump[:800])
+    if "(type 0x10)0x13" not in dump:
+        fail("Manager versionCode is not 19:\n" + dump[:800])
+    if 'versionName(0x0101021c)="1.16.2"' not in dump and '="1.16.2"' not in dump:
+        fail("Manager versionName is not 1.16.2:\n" + dump[:800])
     if "SetupReceiver" not in dump or "mobis.intent.action.SHORTCUT_SETUP" not in dump:
         fail("AndroidManifest missing SETUP shortcut receiver")
     if "mobis.intent.action.SHORTCUT_MODE" not in dump:
@@ -155,7 +155,7 @@ def main() -> None:
         fail("popup card is full height")
     if "@drawable/co_bg\"" in dlg:
         fail("popup card uses the full-screen background bitmap")
-    print("OK: Manager APK DEX 035, all Java classes present, no Application, versionCode 18")
+    print("OK: Manager APK DEX 035, all Java classes present, no Application, versionCode 19")
 
 
 if __name__ == "__main__":

@@ -1128,11 +1128,16 @@ int replace_keep_attrs(const char *src, const char *dst) {
     int fd;
     if (stat(dst, &st) != 0 || stat(src, &want) != 0) return -1;
     n = lgetxattr(dst, "security.selinux", label, sizeof(label));
+    errno = 0; /* the size check sets none, so it must not report this call's */
     snprintf(tmp, sizeof(tmp), "%s.nemesis-new", dst);
     unlink(tmp);
     if (copy_file(src, tmp, st.st_mode & 0777) != 0) goto fail;
     if (chown(tmp, st.st_uid, st.st_gid) != 0 || chmod(tmp, st.st_mode & 07777) != 0) goto fail;
-    if (n > 0 && lsetxattr(tmp, "security.selinux", label, (size_t)n, 0) != 0) goto fail;
+    if (n > 0 && lsetxattr(tmp, "security.selinux", label, (size_t)n, 0) != 0) {
+        /* Real units boot with SELinux disabled and refuse the write: the label means nothing there. */
+        if (errno != EOPNOTSUPP) goto fail;
+        log_msg("replace %s: label not kept errno=%d", dst, errno);
+    }
     fd = open(tmp, O_RDONLY);
     if (fd < 0) goto fail;
     if (fsync(fd) != 0) {

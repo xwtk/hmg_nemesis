@@ -61,13 +61,17 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.1.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.2.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
 **Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal.
 
 ## **Changelog**
+
+### 1.16.2
+
+- **Updater.** Fixes the update from 1.16 failing with `replace /system/etc/qb_runtime.sh failed errno=95` and `restore FAILED`. A unit that showed this is still on 1.16 and is safe to use: update again to 1.16.2.
 
 ### 1.16.1
 
