@@ -81,6 +81,7 @@ GET {BASE_URL}/store/catalog
       "os": "any",
       "models": "any",
       "type": "tool",
+      "descriptor": "1.1",
       "community": true
     }
   ]
@@ -89,6 +90,7 @@ GET {BASE_URL}/store/catalog
 
 - `id` is required. `name` falls back to `id`. `short-desc` and `published` may be empty.
 - `community` is a boolean. The web store shows a Community badge when it is `true`. xwtk.Portal sets it for packages from other publishers, and the owner of the store chooses it for their own. Missing means `false`.
+- `descriptor` is the package's `NEMESIS.data` `version`. The web store and Manager show anything below `1.1` in yellow with a warning that it may not be compatible. Missing means no warning.
 - Use `YYYY-MM-DD` for `published`, because sorting by date compares the text.
 - A reply without a `packages` array counts as unreachable.
 - Clients ignore keys they do not use. The Manager reads `package-version`, `os`, `models` and `type` from the descriptor, and the web page reads them from here to avoid one request per row.
@@ -114,7 +116,7 @@ The `id` is URL-encoded.
 }
 ```
 
-The server also sends the fields below, which the web page shows under Details. Manager ignores them.
+The server also sends the fields below, which the web page shows under Details. Manager reads only `descriptor` and `detailed-desc` from them.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -126,6 +128,7 @@ The server also sends the fields below, which the web page shows under Details. 
 | `size` | number | Zip size in bytes |
 | `repository` | string | Source URL from the package, may be empty |
 | `apps`, `services` | array of strings | What the package installs |
+| `descriptor` | string | As in the catalog |
 | `community` | boolean | As in the catalog |
 
 All of the other fields are strings, and `package-version`, `os`, `models`, `depends`, `url` and `sha256` are the ones Manager acts on.

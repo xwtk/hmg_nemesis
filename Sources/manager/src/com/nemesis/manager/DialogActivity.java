@@ -165,6 +165,9 @@ public class DialogActivity extends Activity {
             String n = name != null ? name : "";
             msg.setText("Package \"" + n + "\" is already installed. Do you wish to update it?");
             confirm = true;
+        } else if ("confirm_reboot".equals(mode)) {
+            msg.setText(R.string.reboot_q);
+            confirm = true;
         } else if ("wipe".equals(mode)) {
             msg.setText(R.string.wipe_q);
             confirm = true;
@@ -214,7 +217,28 @@ public class DialogActivity extends Activity {
         wireClose();
     }
 
+    private void runReboot() {
+        new Thread(new Runnable() {
+            public void run() {
+                if (Cli.runRc("root", "-c", "sync; /system/bin/reboot") == 0) return;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (isFinishing()) return;
+                        Intent i = new Intent(getIntent());
+                        i.putExtra("nemesis_mode", "result_fail");
+                        bind(i);
+                    }
+                });
+            }
+        }).start();
+    }
+
     private void onYes() {
+        if ("confirm_reboot".equals(mode)) {
+            showProgress(getString(R.string.rebooting));
+            runReboot();
+            return;
+        }
         if ("wipe".equals(mode)) {
             Intent i = new Intent(getIntent());
             i.putExtra("nemesis_mode", "wipe2");

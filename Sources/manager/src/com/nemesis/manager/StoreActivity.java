@@ -1,6 +1,7 @@
 package com.nemesis.manager;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
@@ -39,7 +40,6 @@ public class StoreActivity extends Activity {
     private List<StoreList.Entry> onlineRows = new ArrayList<StoreList.Entry>();
     private List<StoreList.Entry> all = new ArrayList<StoreList.Entry>();
     private List<StoreList.Entry> shown = new ArrayList<StoreList.Entry>();
-    private StoreList.Entry selected;
     private boolean showAll;
     private boolean byDate = true;
     private boolean ascending;
@@ -62,8 +62,7 @@ public class StoreActivity extends Activity {
         lv.setEmptyView(findViewById(R.id.empty));
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
-                selected = pos < shown.size() ? shown.get(pos) : null;
-                refresh();
+                if (pos < shown.size()) open(shown.get(pos));
             }
         });
         click(R.id.tab_usb, new Runnable() {
@@ -92,16 +91,6 @@ public class StoreActivity extends Activity {
             public void run() {
                 showAll = !showAll;
                 refresh();
-            }
-        });
-        click(R.id.btn_a, new Runnable() {
-            public void run() {
-                onInstall();
-            }
-        });
-        click(R.id.btn_b, new Runnable() {
-            public void run() {
-                onUninstall();
             }
         });
         ((EditText) findViewById(R.id.search)).addTextChangedListener(new TextWatcher() {
@@ -191,7 +180,6 @@ public class StoreActivity extends Activity {
 
     private void showRows() {
         all = usbTab ? usbRows : onlineRows;
-        selected = null;
         refresh();
         resolve(++resolveGen, all, usbTab, usbRoot);
     }
@@ -205,7 +193,7 @@ public class StoreActivity extends Activity {
                     StoreList.Entry e = rows.get(i);
                     try {
                         if (usb) resolveUsb(e, root);
-                        else resolveOnline(e);
+                        else resolveOnline(StoreActivity.this, e);
                     } catch (Throwable t) {
                         CrashLog.note("update.log", "descriptor " + e.name + ": " + t);
                     }
@@ -219,7 +207,7 @@ public class StoreActivity extends Activity {
         }).start();
     }
 
-    private void resolveUsb(StoreList.Entry e, String root) {
+    static void resolveUsb(StoreList.Entry e, String root) {
         Cli.Result r = Cli.exec("pkg-info", root + "/" + e.path);
         if (r.rc != 0) {
             e.compat = StoreList.NONE;
@@ -232,13 +220,17 @@ public class StoreActivity extends Activity {
         e.installed = or(m.get("installed-version"), "");
         e.locked = "1".equals(m.get("locked"));
         e.compat = StoreList.compatOf(m.get("compat"));
+        e.legacy = StoreList.isLegacy(m.get("version"));
+        e.detailedDesc = PackageActivity.unescape(or(m.get("detailed-desc"), ""));
     }
 
-    private void resolveOnline(StoreList.Entry e) throws Exception {
-        JSONObject d = Portal.descriptor(this, e.id);
+    static void resolveOnline(Context ctx, StoreList.Entry e) throws Exception {
+        JSONObject d = Portal.descriptor(ctx, e.id);
         e.version = d.optString("package-version", "");
         e.url = d.optString("url", "");
         e.sha256 = d.optString("sha256", "");
+        e.legacy = StoreList.isLegacy(d.optString("descriptor", ""));
+        e.detailedDesc = d.optString("detailed-desc", "");
         Map<String, String> m = Cli.fields(Cli.run("pkg-info", e.id));
         e.isInstalled = "1".equals(m.get("installed"));
         e.installed = or(m.get("installed-version"), "");
@@ -255,7 +247,6 @@ public class StoreActivity extends Activity {
     private void refresh() {
         String q = ((EditText) findViewById(R.id.search)).getText().toString();
         shown = StoreList.view(all, q, showAll, byDate, ascending);
-        if (selected != null && !shown.contains(selected)) selected = null;
         adapter.notifyDataSetChanged();
         tab(R.id.tab_usb, usbOk, usbTab);
         tab(R.id.tab_online, onlineOk, !usbTab);
@@ -266,15 +257,6 @@ public class StoreActivity extends Activity {
         more.setVisibility(hidden > 0 ? View.VISIBLE : View.GONE);
         more.setText(showAll ? getString(R.string.show_full_only)
                 : getString(R.string.show_all).replace("%d", String.valueOf(hidden)));
-        Button a = (Button) findViewById(R.id.btn_a);
-        Button b = (Button) findViewById(R.id.btn_b);
-        boolean sel = selected != null && selected.compat != StoreList.UNKNOWN && !selected.locked;
-        boolean differs = sel && selected.isInstalled
-                && UpdateRule.compare(selected.version, selected.installed) != 0;
-        a.setText(differs ? R.string.update : R.string.install);
-        a.setEnabled(sel && (!selected.isInstalled || differs));
-        b.setText(R.string.uninstall);
-        b.setEnabled(sel && selected.isInstalled);
     }
 
     private void tab(int id, boolean enabled, boolean on) {
@@ -284,37 +266,17 @@ public class StoreActivity extends Activity {
         t.setTextColor(on && enabled ? 0xFFFFFFFF : 0xFF62797F);
     }
 
-    private void onInstall() {
-        if (selected == null) return;
-        StoreList.Entry e = selected;
-        Intent i = new Intent(this, DialogActivity.class);
-        i.putExtra("nemesis_name", e.name);
+    private void open(StoreList.Entry e) {
+        Intent i = new Intent(this, StoreDetailActivity.class);
+        i.putExtra("store_id", e.id);
+        i.putExtra("store_name", e.name);
+        i.putExtra("store_short", e.shortDesc);
+        i.putExtra("store_published", e.published);
         if (usbTab) {
-            i.putExtra("nemesis_path", usbRoot + "/" + e.path);
-        } else {
-            i.putExtra("nemesis_url", e.url);
-            i.putExtra("nemesis_sha256", e.sha256);
-        }
-        if (e.isInstalled) i.putExtra("nemesis_replace", e.id);
-        // An incompatible package gets the risk popup from either tab, update or not.
-        if (e.compat == StoreList.NONE) {
-            i.putExtra("nemesis_mode", "confirm_risk");
-            i.putExtra("nemesis_risk", true);
-        } else if (e.isInstalled) {
-            i.putExtra("nemesis_mode", "confirm_store_update");
-        } else {
-            i.putExtra("nemesis_mode", "confirm_store_install");
+            i.putExtra("store_root", usbRoot);
+            i.putExtra("store_path", e.path);
         }
         startActivity(i);
-    }
-
-    private void onUninstall() {
-        if (selected == null) return;
-        Intent ask = new Intent(this, DialogActivity.class);
-        ask.putExtra("nemesis_mode", "confirm_uninstall");
-        ask.putExtra("nemesis_id", selected.id);
-        ask.putExtra("nemesis_message", getString(R.string.confirm_uninstall).replace("%s", selected.name));
-        startActivity(ask);
     }
 
     private final class RowAdapter extends BaseAdapter {
@@ -336,11 +298,12 @@ public class StoreActivity extends Activity {
             StoreList.Entry e = shown.get(pos);
             TextView t = (TextView) v.findViewById(R.id.row_title);
             TextView s = (TextView) v.findViewById(R.id.row_summary);
-            t.setText(e.isInstalled ? e.name + "  (" + e.installed + ")" : e.name);
-            t.setTextColor(e.compat == StoreList.FULL ? GREEN : e.compat == StoreList.PARTIAL ? YELLOW
-                    : e.compat == StoreList.NONE ? RED : PLAIN);
-            s.setText(e.shortDesc);
-            v.setBackgroundResource(e == selected ? R.drawable.co_btn_bg_list_sel : R.drawable.co_list_selector);
+            String tag = e.installed.length() > 0 ? e.installed : getString(R.string.installed_tag);
+            t.setText(e.isInstalled ? e.name + "  (" + tag + ")" : e.name);
+            int shade = StoreList.shade(e);
+            t.setTextColor(shade == StoreList.FULL ? GREEN : shade == StoreList.PARTIAL ? YELLOW
+                    : shade == StoreList.NONE ? RED : PLAIN);
+            s.setText(e.legacy ? getString(R.string.legacy_short) + " • " + e.shortDesc : e.shortDesc);
             return v;
         }
     }

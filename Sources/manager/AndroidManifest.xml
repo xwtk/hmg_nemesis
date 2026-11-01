@@ -44,6 +44,9 @@
             android:exported="true"
             android:windowSoftInputMode="stateHidden" />
         <activity
+            android:name=".StoreDetailActivity"
+            android:theme="@style/Hkmc" />
+        <activity
             android:name=".PackageActivity"
             android:theme="@style/Hkmc" />
         <activity
@@ -55,10 +58,15 @@
         <service
             android:name=".UpdateService"
             android:exported="false" />
-        <!-- Explicit broadcasts from the watchdog and the update monitor. -->
+        <!-- Explicit broadcasts from the watchdog and the update monitor, and the head unit's screen state. -->
         <receiver
             android:name=".EventReceiver"
-            android:exported="true" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.mobis.intent.action.SCREEN_ON" />
+                <action android:name="com.mobis.intent.action.SCREEN_OFF" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".SetupReceiver"
             android:exported="true">

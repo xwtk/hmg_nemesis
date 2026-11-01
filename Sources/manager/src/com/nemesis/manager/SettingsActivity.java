@@ -45,6 +45,8 @@ public class SettingsActivity extends Activity {
                     getString(R.string.auto_launch_sum), "auto", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.check_updates),
                     getString(R.string.title) + " " + Ui.versionName(this), "update", false));
+            rows.add(new TwoLineAdapter.Row(getString(R.string.reboot),
+                    getString(R.string.reboot_sum), "reboot", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.wipe),
                     getString(R.string.wipe_sum), "wipe", false));
         } else {
@@ -82,6 +84,10 @@ public class SettingsActivity extends Activity {
         } else if ("update".equals(key)) {
             Intent i = new Intent(this, DialogActivity.class);
             i.putExtra("nemesis_mode", "update_check");
+            startActivity(i);
+        } else if ("reboot".equals(key)) {
+            Intent i = new Intent(this, DialogActivity.class);
+            i.putExtra("nemesis_mode", "confirm_reboot");
             startActivity(i);
         } else if ("wipe".equals(key)) {
             Intent i = new Intent(this, DialogActivity.class);

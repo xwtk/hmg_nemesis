@@ -19,7 +19,7 @@ You bear complete responsibility for any procedure with your car and its compone
 
 ## Packages
 
-Discover pre-made packages for you to install on your car. Browse catalog [here](Packages/README.md).
+Discover packages to install on your car in the [NEMESIS Package Store](https://xwtk.cloud/services/nemesis#package-store). Made one of your own? [Submit it to the store](07-Submit-a-Package.md).
 
 ## Compatibility Check
 
@@ -61,11 +61,11 @@ Most likely nothing, NEMESIS won't install.
 
 ### 1.16
 
-- **Package Store.** Manager has a Package Store with an online tab (xwtk.Portal) and a USB tab (`type=list`). Rows are colored by compatibility with your OS version, car model and dependencies, and several packages can be installed in one go. The same store is on the [website](https://xwtk.cloud/services/nemesis#package-store), where packages from other publishers carry a Community badge.
+- **Package Store.** Manager has a Package Store with an online tab (xwtk.Portal) and a USB tab (`type=list`). Rows are colored by compatibility with your OS version, car model and dependencies, and several packages can be installed in one go. Tap a package to open its details, where Install, Update and Uninstall are. Packages with a `version=1.0` descriptor are shown in yellow with a warning that they may not be compatible. The same store is on the [website](https://xwtk.cloud/services/nemesis#package-store), where packages from other publishers carry a Community badge.
 - **NEMESIS updater.** `nemesis update`, USB `type=update`, a manual check in Settings, and an hourly Update Monitor that does the 24 hour online check.
 - **Wipe.** `nemesis wipe --confirm` and a Wipe action in Manager, which asks twice.
 - **Package descriptors `version=1.1`.** New keys: `type`, `package-version`, `short-desc`, `os`, `models` and `depends`. `version=1.0` descriptors still work. A package cannot be uninstalled while another one depends on it.
-- **Manager.** New layout: My Packages, Package Store, Android Apps and Settings. Root certificates ship with it so HTTPS works on the unit.
+- **Manager.** New layout: My Packages, Package Store, Android Apps and Settings. Root certificates ship with it so HTTPS works on the unit. Settings has a Reboot button. Running a script package shows what the script printed as a toast. Auto-launch also runs when the screen comes back on with Android still up.
 - **Fixes.** NEMESIS missing after a remote start, the Manager crash about `GET_TASKS` and after Close, the service staying disabled after repeated crashes, Manager opening on the first press, and Setup covering Manager after it opened.
 - **Self-hosted stores.** The store API is documented in [06 - Cloud Store API](06-Cloud-Store-API.md), so a fork can run its own.
 
@@ -81,6 +81,7 @@ Read about NEMESIS, what it is exploiting, what it features, and its use manual.
 | [04 - Packages](04-Packages.md) | Installable packages: metadata, layout, builder, lifecycle. |
 | [05 - Run scripts](05-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
 | [06 - Cloud Store API](06-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
+| [07 - Submit a package](07-Submit-a-Package.md) | Step by step: from an xwtk.Account to a listing in the NEMESIS Package Store. |
 
 Documents **01** and **03** are the only ones that describe the DSP Update Agent path and on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **02**, **04**, **05** and **06** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
 

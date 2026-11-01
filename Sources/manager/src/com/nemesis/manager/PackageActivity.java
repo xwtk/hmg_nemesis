@@ -59,11 +59,12 @@ public class PackageActivity extends Activity {
     private void launch() {
         new Thread(new Runnable() {
             public void run() {
-                final Cli.Result r = Cli.exec("pkg-launch", id);
-                if (r.rc == 0) return;
+                // Whatever the package's script printed, without nemesis's own ok line.
+                final String text = Cli.run("pkg-launch", id).replace("ok launched " + id, "").trim();
+                if (text.length() == 0) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        Ui.toast(PackageActivity.this, r.out.trim());
+                        Ui.toast(PackageActivity.this, text);
                     }
                 });
             }

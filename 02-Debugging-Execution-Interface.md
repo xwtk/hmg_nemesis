@@ -82,7 +82,7 @@ The home screen has two columns. **My Packages** on the left scrolls vertically 
 | My Packages (tap a row) | Package details, Launch, Uninstall. Launch shows a message only if it fails. |
 | Package Store | Online and USB packages. Search, sort by date or name, compatibility colours, Install, Update, Uninstall. |
 | Android Apps | Installed Android apps. Ticks choose which apps start automatically after Android comes up. |
-| Settings | Trigger button, Auto-launch, Check for updates, Wipe NEMESIS |
+| Settings | Trigger button, Auto-launch, Check for updates, Reboot, Wipe NEMESIS |
 | Services | List, Start, Stop (`<package-id>/<local-name>`) |
 | Logs | Last NEMESIS log; **Copy to USB** writes `/storage/usb0/NEMESIS-logs` |
 | Engineering Menu | Opens Engineering Mode |

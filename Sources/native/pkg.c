@@ -977,12 +977,13 @@ int cmd_pkg_launch(const char *id) {
                     }
                 }
             }
+            /* The Manager toasts pkg-launch output: only a script's own text is meant for it. */
             if (comp && *comp) {
                 snprintf(cmd, sizeof(cmd),
-                         "/system/bin/am start -n '%s' -f 0x10000000", comp);
+                         "/system/bin/am start -n '%s' -f 0x10000000 >/dev/null", comp);
             } else {
                 snprintf(cmd, sizeof(cmd),
-                         "/system/bin/monkey -p '%s' -c android.intent.category.LAUNCHER 1",
+                         "/system/bin/monkey -p '%s' -c android.intent.category.LAUNCHER 1 >/dev/null",
                          pkg);
             }
             if (run_cmd(cmd) != 0) {

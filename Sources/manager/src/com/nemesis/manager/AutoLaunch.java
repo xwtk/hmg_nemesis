@@ -3,15 +3,19 @@ package com.nemesis.manager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Apps started once per boot, in the order they were checked. */
+/** Apps started once per boot and when the screen comes back, in the order they were checked. */
 final class AutoLaunch {
     private static final String PREFS = "auto_launch";
     private static final String KEY = "packages";
     private static final long GAP_MS = 1500;
+    static final String ACTION_SCREEN_ON = "com.mobis.intent.action.SCREEN_ON";
+    static final String ACTION_SCREEN_OFF = "com.mobis.intent.action.SCREEN_OFF";
+    private static final String KEY_OFF = "screen_off_at";
 
     private AutoLaunch() {
     }
@@ -32,6 +36,22 @@ final class AutoLaunch {
         SharedPreferences.Editor e = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
         e.putString(KEY, sb.toString());
         e.commit();
+    }
+
+    static void markOff(Context c) {
+        SharedPreferences.Editor e = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
+        e.putLong(KEY_OFF, SystemClock.elapsedRealtime());
+        e.commit();
+    }
+
+    /** SCREEN_ON also fires with the screen already on, so only one after SCREEN_OFF counts.
+     *  An off time past the current uptime is from before a reboot: ANDROID_UP covers that. */
+    static boolean takeOff(Context c, long now) {
+        SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        long off = p.getLong(KEY_OFF, 0);
+        if (off == 0) return false;
+        p.edit().remove(KEY_OFF).commit();
+        return off <= now;
     }
 
     /** The app's main activity only. MainActivity has no launcher category of its own. */

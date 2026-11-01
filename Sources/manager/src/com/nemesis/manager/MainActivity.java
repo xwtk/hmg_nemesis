@@ -197,6 +197,7 @@ public class MainActivity extends Activity {
         for (int pg = 0; pg < pages; pg++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
+            page.setGravity(Gravity.CENTER_VERTICAL);
             for (int r = 0; r < ROWS; r++) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -206,8 +207,9 @@ public class MainActivity extends Activity {
                     row.addView(cell, new LinearLayout.LayoutParams(0,
                             LinearLayout.LayoutParams.MATCH_PARENT, 1));
                 }
+                // Tile height, not a share of the pane: stretched rows leave a wide gap.
                 page.addView(row, new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+                        LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 166)));
             }
             pager.addPage(page);
         }

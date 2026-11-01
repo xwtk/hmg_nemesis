@@ -28,6 +28,14 @@ public class StoreLogicRun {
     }
 
     private static void versions() {
+        check(StoreList.isLegacy("1.0") && !StoreList.isLegacy("1.1") && !StoreList.isLegacy(""), "legacy descriptor");
+        StoreList.Entry old = new StoreList.Entry();
+        old.compat = StoreList.FULL;
+        old.legacy = true;
+        check(StoreList.shade(old) == StoreList.PARTIAL, "legacy is never green");
+        check(StoreList.hiddenCount(java.util.Collections.singletonList(old)) == 0, "legacy stays listed");
+        old.compat = StoreList.NONE;
+        check(StoreList.shade(old) == StoreList.NONE, "legacy keeps red");
         check(UpdateRule.compare("1.16", "1.15") > 0, "1.16 is newer than 1.15");
         check(UpdateRule.compare("1.9", "1.10") < 0, "numeric, not text");
         check(UpdateRule.compare("1.16", "1.16.0") == 0, "missing part is zero");

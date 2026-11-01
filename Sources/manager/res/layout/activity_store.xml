@@ -97,36 +97,6 @@
                 android:listSelector="@drawable/co_list_selector"
                 android:cacheColorHint="#00000000" />
         </FrameLayout>
-        <LinearLayout
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:background="@drawable/co_bg_bottom"
-            android:layout_width="match_parent"
-            android:layout_height="60dp">
-            <Button
-                android:id="@+id/btn_a"
-                android:text="@string/install"
-                android:layout_width="wrap_content"
-                android:layout_height="60dp"
-                android:minWidth="120dp"
-                android:textSize="21sp"
-                android:textColor="@color/title_btn_text"
-                android:background="@drawable/co_bt_title"
-                android:paddingLeft="18dp"
-                android:paddingRight="18dp"
-                android:layout_marginRight="8dp" />
-            <Button
-                android:id="@+id/btn_b"
-                android:text="@string/uninstall"
-                android:layout_width="wrap_content"
-                android:layout_height="60dp"
-                android:minWidth="120dp"
-                android:textSize="21sp"
-                android:textColor="@color/title_btn_text"
-                android:background="@drawable/co_bt_title"
-                android:paddingLeft="18dp"
-                android:paddingRight="18dp" />
-        </LinearLayout>
     </LinearLayout>
     <ImageView
         android:layout_width="match_parent"

@@ -25,6 +25,8 @@ final class StoreList {
         String installed = "";
         boolean isInstalled;
         boolean locked;
+        boolean legacy;
+        String detailedDesc = "";
         int compat = UNKNOWN;
         String url = "";
         String sha256 = "";
@@ -112,6 +114,16 @@ final class StoreList {
         if ("partial".equals(name)) return PARTIAL;
         if ("incompatible".equals(name)) return NONE;
         return UNKNOWN;
+    }
+
+    /** A 1.0 descriptor declares no OS or car, so its "full" says nothing: never show it green. */
+    static boolean isLegacy(String descriptor) {
+        return descriptor != null && descriptor.length() > 0 && UpdateRule.compare(descriptor, "1.1") < 0;
+    }
+
+    /** The colour a row gets. Stays listed by default, unlike a real PARTIAL. */
+    static int shade(Entry e) {
+        return e.legacy && e.compat == FULL ? PARTIAL : e.compat;
     }
 
     static boolean matches(Entry e, String query) {

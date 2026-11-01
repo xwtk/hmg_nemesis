@@ -13,6 +13,9 @@ import java.util.Map;
 public class UpdateService extends IntentService {
     static final String ACTION_ANDROID_UP = "com.nemesis.manager.ANDROID_UP";
     static final String ACTION_TICK = "com.nemesis.manager.UPDATE_TICK";
+    static final String ACTION_WOKE = "com.nemesis.manager.SCREEN_BACK";
+    // CarPlay comes up about a second after the screen and would cover an earlier launch.
+    private static final long WOKE_DELAY_MS = 3000;
     static final String ZIP_NAME = "nemesis-update.zip";
     private static final String PREFS = "update_check";
 
@@ -25,6 +28,10 @@ public class UpdateService extends IntentService {
         if (intent == null) return;
         try {
             if (ACTION_ANDROID_UP.equals(intent.getAction())) AutoLaunch.run(this);
+            if (ACTION_WOKE.equals(intent.getAction())) {
+                SystemClock.sleep(WOKE_DELAY_MS);
+                AutoLaunch.run(this);
+            }
             backgroundCheck();
         } catch (Throwable t) {
             CrashLog.note("update.log", "service: " + t);
