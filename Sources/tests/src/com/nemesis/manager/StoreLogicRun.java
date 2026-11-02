@@ -52,7 +52,7 @@ public class StoreLogicRun {
         check(!UpdateRule.networkAllowed(false, 0, "odd0"), "unknown name on mobile is off");
         check(UpdateRule.networkAllowed(false, 1, "odd0"), "unknown name on Wi-Fi is on");
         check(!UpdateRule.networkAllowed(false, -1, null), "no route is off");
-        check(UpdateRule.networkAllowed(true, 0, "rmnet0"), "Use Telematics Internet allows the SIM");
+        check(UpdateRule.networkAllowed(true, 0, "rmnet0"), "Use built-in modem allows the SIM");
         String routes = "Iface\tDestination\tGateway\nwlan0\t0001A8C0\t00000000\nrmnet0\t00000000\t0101A8C0\n";
         check("rmnet0".equals(UpdateRule.defaultRouteIface(routes)), "default route interface");
         check(UpdateRule.defaultRouteIface("Iface\tDestination\nwlan0\t0001A8C0\n") == null, "no default route");

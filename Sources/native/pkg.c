@@ -11,7 +11,8 @@ static int pkg_id_ok(const char *id) {
     if (!id || !*id) return 0;
     n = strlen(id);
     if (n > 64) return 0;
-    if (id[0] == '.') return 0;
+    /* A leading - would read as an option to uninstall. */
+    if (id[0] == '.' || id[0] == '-') return 0;
     if (strstr(id, "..")) return 0;
     for (i = 0; i < n; i++) {
         char c = id[i];
@@ -224,6 +225,36 @@ static int hook_path(char *out, size_t cap, const char *root, const char *rel) {
     return 1;
 }
 
+/* True when rel has a ".." component. Absolute paths stay allowed. */
+static int path_has_dotdot(const char *rel) {
+    const char *p;
+    if (!rel) return 0;
+    for (p = rel; *p; ) {
+        const char *e = strchr(p, '/');
+        size_t n = e ? (size_t)(e - p) : strlen(p);
+        if (n == 2 && p[0] == '.' && p[1] == '.') return 1;
+        if (!e) break;
+        p = e + 1;
+    }
+    return 0;
+}
+
+static int manifest_paths_ok(const ini_file *ini) {
+    static const char *hooks[] = {"preinstall", "postinstall", "preuninstall", "postuninstall"};
+    char sec[32];
+    size_t k;
+    int i;
+    for (k = 0; k < sizeof(hooks) / sizeof(hooks[0]); k++)
+        if (path_has_dotdot(ini_get(ini, "nemesis", hooks[k]))) return 0;
+    for (i = 0; i < 32; i++) {
+        snprintf(sec, sizeof(sec), "app.%d", i);
+        if (path_has_dotdot(ini_get(ini, sec, "path"))) return 0;
+        snprintf(sec, sizeof(sec), "service.%d", i);
+        if (path_has_dotdot(ini_get(ini, sec, "path"))) return 0;
+    }
+    return 1;
+}
+
 int load_zip_meta(const char *zip, ini_file *ini, pkg_meta *m) {
     char text[16384], err[128];
     memset(ini, 0, sizeof(*ini));
@@ -242,6 +273,11 @@ int load_zip_meta(const char *zip, ini_file *ini, pkg_meta *m) {
     }
     if (!pkg_id_ok(m->id)) {
         fprintf(stderr, "invalid package id\n");
+        ini_free(ini);
+        return -1;
+    }
+    if (!manifest_paths_ok(ini)) {
+        fprintf(stderr, "invalid package metadata: a path contains ..\n");
         ini_free(ini);
         return -1;
     }
@@ -1365,7 +1401,12 @@ int cmd_wipe(int argc, char **argv) {
     unlink(MANAGER_APK);
     unlink(INSTALL_RECOVERY);
     cacerts_remove_owned(NULL);
-    qb_rewrite(NULL);
+    if (qb_rewrite(NULL) != 0) {
+        /* The hook checks for the binary first, so it does nothing once NEMESIS is gone. */
+        log_msg("wipe: could not remove the boot hook from %s errno=%d", QB_RUNTIME, errno);
+        fprintf(stdout, "wipe warning boot hook stayed in %s\n", QB_RUNTIME);
+        fflush(stdout);
+    }
     unlink(BIN_PATH);
     log_msg("wipe: removing %s", NEMESIS_ROOT);
     fprintf(stdout, "wipe step remove\n");

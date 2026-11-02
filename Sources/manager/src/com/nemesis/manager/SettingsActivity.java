@@ -90,8 +90,15 @@ public class SettingsActivity extends Activity {
         } else if ("auto".equals(key)) {
             startActivity(new Intent(this, AppsActivity.class));
         } else if ("telematics".equals(key)) {
-            Portal.setUseTelematics(this, !Portal.useTelematics(this));
-            bindList();
+            if (Portal.useTelematics(this)) {
+                Portal.setUseTelematics(this, false);
+                bindList();
+            } else {
+                // Turning it on risks the vehicle's modem; DialogActivity sets it on Yes.
+                Intent i = new Intent(this, DialogActivity.class);
+                i.putExtra("nemesis_mode", "confirm_modem");
+                startActivity(i);
+            }
         } else if ("update".equals(key)) {
             Intent i = new Intent(this, DialogActivity.class);
             i.putExtra("nemesis_mode", "update_check");

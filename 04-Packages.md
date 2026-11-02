@@ -29,7 +29,7 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | Key | Required | Meaning |
 |-----|----------|---------|
 | `version` | recommended | Descriptor format: `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. |
-| `id` | yes | Install id. Max 64 characters: letters, digits, `.`, `_`, `-`. No leading `.`, no `..`. |
+| `id` | yes | Install id. Max 64 characters: letters, digits, `.`, `_`, `-`. No leading `.` or `-`, no `..`. |
 | `name` | recommended | Display name (defaults to `id`) |
 | `type` | recommended | Comma list, e.g. `application,service` (shown in `pkg-list`). A `1.0` descriptor names this key `types`, and each format reads the other name as a fallback. |
 | `package-version` | recommended | The package's own version. Dotted numbers only; anything else is refused. Used for updates and for `depends`. |
@@ -44,6 +44,8 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `postuninstall` | no | Copied to tmp then run so it still exists after the tree is deleted |
 
 All listed scripts run as **root** (or `system` if you set `uid=system` on a service; hooks themselves use root).
+
+Hook, `[app.N]`, and `[service.N]` paths may be absolute, but a path with a `..` component is refused at install.
 
 A `spec` in `depends` is one of:
 
@@ -126,6 +128,8 @@ nemesis service stop hello.tool/hello-daemon
 nemesis service status hello.tool/hello-daemon
 nemesis log service hello.tool/hello-daemon
 ```
+
+`service stop` holds until `service start`, a reinstall, or the next time the service manager starts (a reboot). Built-in services always restart.
 
 ---
 
@@ -248,7 +252,7 @@ Locked packages print `package is locked` and stay. Wipe NEMESIS removes everyth
 
 ## 6. Install order (what the CLI does)
 
-1. Read `NEMESIS.data` from the zip; reject bad `id`.
+1. Read `NEMESIS.data` from the zip, the copy nearest the root if there are several; reject a bad `id` or a `..` path.
 2. Refuse if locked and already installed.
 3. Require `--update` (or USB update confirm) if the id exists.
 4. Refuse an update that would break an installed dependent (exit 21).

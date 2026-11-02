@@ -69,7 +69,7 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.3.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.4.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
@@ -78,6 +78,15 @@ OR
 **Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
 
 ## **Changelog**
+
+### 1.16.4
+
+- **Settings.** Use Telematics Internet is now **Use built-in modem for network services**, and turning it on asks you to confirm first.
+- **Services.** A stopped service stays stopped until started again, built-in services excepted. Uninstalling a package no longer risks leaving its service running. A background instance service deferred while Android is down now starts when Android comes up.
+- **Packages.** A hook, app or service path containing `..` is refused, and so is an id starting with `-`. A nested `NEMESIS.data` can no longer replace the one at the root.
+- **USB.** Fixes the handler reading freed memory after an execute or install insertion.
+- **Mount.** The mount wrapper now also recognises `-o rw,remount` and `-o ro,remount`.
+- **Wipe.** Reports when the boot hook could not be removed from `qb_runtime.sh`.
 
 ### 1.16.3
 

@@ -140,7 +140,7 @@ The `Update` folder in the repository is a ready stick: copy its two files to th
 [nemesis]
 version=1.1
 type=update
-path=nemesis-1.16.3.zip
+path=nemesis-1.16.4.zip
 ```
 
 Build the zip on the PC:

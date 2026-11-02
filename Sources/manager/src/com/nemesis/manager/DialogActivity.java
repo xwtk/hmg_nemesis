@@ -177,6 +177,9 @@ public class DialogActivity extends Activity {
             msg.setText(count == 1 ? getString(R.string.pkg_updates_one)
                     : getString(R.string.pkg_updates_many).replace("%d", String.valueOf(count)));
             confirm = true;
+        } else if ("confirm_modem".equals(mode)) {
+            msg.setText(R.string.confirm_modem);
+            confirm = true;
         } else if ("confirm_deps".equals(mode)) {
             msg.setText(custom);
             confirm = true;
@@ -332,6 +335,11 @@ public class DialogActivity extends Activity {
             Intent i = new Intent(this, UpdatesActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
+            Ui.close(this);
+            return;
+        }
+        if ("confirm_modem".equals(mode)) {
+            Portal.setUseTelematics(this, true);
             Ui.close(this);
             return;
         }

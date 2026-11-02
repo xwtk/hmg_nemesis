@@ -61,12 +61,31 @@ static void svc_set_fails(const char *qname, int n) {
     write_file(p, b, 0644);
 }
 
+/* Marker files beside the pidfile: ".stopped" is a stop svcmgr must honor, ".deferred" an
+ * instance start that waits for Android. */
+static void svc_mark(const char *qname, const char *ext, int on) {
+    char p[MAX_PATH];
+    pid_path_for(p, sizeof(p), qname);
+    strcat(p, ext);
+    if (on) write_file(p, "1\n", 0644);
+    else unlink(p);
+}
+
+static int svc_marked(const char *qname, const char *ext) {
+    char p[MAX_PATH];
+    pid_path_for(p, sizeof(p), qname);
+    strcat(p, ext);
+    return is_file(p);
+}
+
 /* Install and uninstall start a service with a clean crash count. */
 void svc_forget(const char *qname) {
     char p[MAX_PATH];
     pid_path_for(p, sizeof(p), qname);
     strcat(p, ".fails");
     unlink(p);
+    svc_mark(qname, ".stopped", 0);
+    svc_mark(qname, ".deferred", 0);
 }
 
 static int svc_locked(const char *qname) {
@@ -95,6 +114,9 @@ int svc_stop(const char *qname) {
     pid_t pid;
     char p[MAX_PATH];
     pid_path_for(p, sizeof(p), qname);
+    svc_mark(qname, ".deferred", 0);
+    /* Before the kill, so svcmgr cannot restart it in between. Built-in services always restart. */
+    if (!svc_locked(qname) && find_svc(qname, &s) == 0) svc_mark(qname, ".stopped", 1);
     if (find_svc(qname, &s) != 0 || !svc_proc_ok(&s)) {
         unlink(p);
         return 0;
@@ -123,6 +145,7 @@ int svc_start_ex(const char *qname, int manual) {
         return 1;
     }
     if (svc_proc_ok(&s)) return 0;
+    svc_mark(qname, ".stopped", 0);
     if (!svc_locked(qname) && svc_fails(qname) >= RESTART_LIMIT && !strcmp(s.mode, "restart")) {
         if (!manual) {
             log_msg("service %s disabled after %d restarts", qname, RESTART_LIMIT);
@@ -138,8 +161,10 @@ int svc_start_ex(const char *qname, int manual) {
     }
     if (!strcmp(s.kind, "instance") && !framework_up()) {
         log_msg("defer instance %s (android down)", qname);
+        svc_mark(qname, ".deferred", 1);
         return 0;
     }
+    svc_mark(qname, ".deferred", 0);
     pid = fork();
     if (pid < 0) return 1;
     if (pid == 0) {
@@ -255,6 +280,7 @@ int cmd_svcmgr(void) {
     write_pidfile(SM_PIDFILE, getpid());
     log_msg("svcmgr start pid=%d", (int)getpid());
     /* launch all registered services */
+    /* shortcut: svcmgr's start clears every ".stopped" mark, so a user stop lasts until svcmgr or the unit restarts; persist it if that matters. */
     {
         svc_rec *list = NULL;
         int n = 0, i;
@@ -288,6 +314,11 @@ int cmd_svcmgr(void) {
                 continue;
             }
             if (!strcmp(list[i].kind, "instance") && !framework_up()) continue;
+            if (svc_marked(list[i].qname, ".stopped")) continue;
+            if (svc_marked(list[i].qname, ".deferred")) {
+                svc_start(list[i].qname);
+                continue;
+            }
             if (!strcmp(list[i].mode, "background")) continue;
             if (!strcmp(list[i].mode, "restart")) {
                 if (svc_locked(list[i].qname)) {

@@ -735,10 +735,11 @@ int cmd_usb_handler(void) {
                     do_install(full, reply, sizeof(reply));
                 }
             }
-            ini_free(&ini);
             handled = 1;
             have_ident = usb_ident_of(meta, &last_id) == 0;
+            /* type and rel point into ini: free it after they are logged. */
             log_handled(type, rel, reply);
+            ini_free(&ini);
         }
         sleep(1);
     }

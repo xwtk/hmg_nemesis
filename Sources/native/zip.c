@@ -220,16 +220,22 @@ struct file_ctx {
     char *out;
     size_t cap;
     int found;
+    int depth;
 };
 
 static int file_cb(const char *name, const unsigned char *data, size_t n, void *v) {
     struct file_ctx *c = v;
     const char *base = name;
     const char *sl;
-    if (c->found) return 0;
+    int depth = 0;
+    for (sl = name; *sl; sl++)
+        if (*sl == '/') depth++;
     sl = strrchr(name, '/');
     if (sl) base = sl + 1;
     if (strcasecmp(name, c->member) && strcasecmp(base, c->member)) return 0;
+    /* The shallowest match wins, so a nested copy cannot shadow the root one. */
+    if (c->found && depth >= c->depth) return 0;
+    c->depth = depth;
     if (n >= c->cap) n = c->cap - 1;
     memcpy(c->out, data, n);
     c->out[n] = 0;

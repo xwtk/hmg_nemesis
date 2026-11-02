@@ -109,7 +109,7 @@ final class Portal {
                 .putBoolean(KEY_TELEMATICS, on).commit();
     }
 
-    /** The one gate for all of Manager's traffic: Wi-Fi or a hotspot, or Use Telematics Internet. */
+    /** The one gate for all of Manager's traffic: Wi-Fi or a hotspot, or Use built-in modem for network services. */
     private static void checkNetwork(Context c) throws IOException {
         if (useTelematics(c)) return;
         int type = -1;
