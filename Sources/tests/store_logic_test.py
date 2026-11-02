@@ -14,7 +14,7 @@ RUN = ROOT / "tests" / "src" / "com" / "nemesis" / "manager" / "StoreLogicRun.ja
 
 
 def main() -> None:
-    srcs = [PKG / "UpdateRule.java", PKG / "StoreList.java", RUN]
+    srcs = [PKG / "UpdateRule.java", PKG / "StoreList.java", PKG / "DepPlan.java", RUN]
     for s in srcs:
         if not s.is_file():
             print(f"FAIL: missing {s}", file=sys.stderr)

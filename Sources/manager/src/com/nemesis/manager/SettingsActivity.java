@@ -64,7 +64,7 @@ public class SettingsActivity extends Activity {
         } else {
             ArrayList<String> checked = new ArrayList<String>();
             if (Portal.useTelematics(this)) checked.add("telematics");
-            lv.setAdapter(new CheckAdapter(this, rows, checked));
+            lv.setAdapter(new CheckAdapter(this, rows, checked, java.util.Collections.singletonList("telematics")));
         }
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {

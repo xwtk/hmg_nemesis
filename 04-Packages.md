@@ -35,7 +35,7 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `package-version` | recommended | The package's own version. Dotted numbers only; anything else is refused. Used for updates and for `depends`. |
 | `short-desc` | recommended | One line for lists. Over 64 characters is refused. |
 | `detailed-desc` | no | Text for the details screen. Over 256 characters is refused. |
-| `depends` | no | Comma list of `id` or `id@spec`. See below. |
+| `depends` | no | Comma list of `id` or `id@spec`, and `!id` or `!id@spec` for packages this one cannot live with. See below. |
 | `os` | no | Comma list of OS version globs, or `any`. Missing means `any`. |
 | `models` | no | Comma list of model globs, or `any`. Missing means `any`. |
 | `preinstall` | no | Script run **before** the tree is copied, cwd = staging dir |
@@ -55,17 +55,29 @@ A `spec` in `depends` is one of:
 | `<=1.2` | 1.2 or older |
 | `1.2-1.5` | From 1.2 to 1.5 |
 
+A `!` makes the item an incompatibility: `depends="base@>=1.0,!other,!legacy@<=2.0"`. The package will not install while `other`, or `legacy` at 2.0 or older, is installed, and those packages cannot install while it is. The user has to uninstall one of them first. A package cannot name itself, and cannot both need and refuse the same id.
+
 `os` and `models` items may use `*` and `?`. `nemesis compat <zip|package-id>` prints the verdict and its reasons:
 
 | Verdict | When |
 |---------|------|
-| `full` | Dependencies are met and `os` matches |
-| `partial` | Dependencies are met, `os` does not match, and `models` matches |
-| `incompatible` | A dependency is missing or the wrong version, or neither `os` nor `models` matches |
+| `full` | `os` matches |
+| `partial` | `os` does not match, and `models` matches |
+| `incompatible` | Neither `os` nor `models` matches |
 
 `incompatible` stops the install with exit code 20 until `--accept-risk` is passed. Manager asks first.
 
-Dependencies also guard removal. Uninstalling a package that others depend on exits 4 and lists them. Updating it to a version that no longer satisfies them exits 21.
+The verdict is about the head unit only. Dependencies are listed as reasons but do not change it. They are checked at install:
+
+| Exit code | When | Output lines |
+|-----------|------|--------------|
+| 21 | The update no longer satisfies an installed package that depends on this one | `dependent <id>\|<name>` |
+| 22 | A dependency is missing or the wrong version. `--accept-risk` does not override this. | `dep-missing <id>`, `dep-version ...` |
+| 23 | This package and an installed one exclude each other with `!` | `conflict <id>\|<name>` |
+
+Uninstalling a package that others depend on exits 4 and lists them. A dependency can be updated while its dependents stay installed, as long as the new version still satisfies them. `install --force` does not skip these checks: it only carries on when the old version's uninstall hook or `pm` fails during an update.
+
+When a package needs something, Manager looks for it on the USB drive first and then online. If everything can be found, it lists what will be installed or updated and asks before continuing, dependencies first. If something cannot be found, the install stops and says what is missing.
 
 ---
 
@@ -240,8 +252,9 @@ Locked packages print `package is locked` and stay. Wipe NEMESIS removes everyth
 2. Refuse if locked and already installed.
 3. Require `--update` (or USB update confirm) if the id exists.
 4. Refuse an update that would break an installed dependent (exit 21).
-5. Refuse an `incompatible` package unless `--accept-risk` is passed (exit 20).
-6. Extract to `/data/local/tmp/nemesis/stage/<id>` (zip-slip `..` members are not applied).
-7. `preinstall` → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → register services → write `packages.db` → `postinstall` → start services.
+5. Refuse unmet dependencies (exit 22) and packages excluded with `!` (exit 23).
+6. Refuse an `incompatible` package unless `--accept-risk` is passed (exit 20).
+7. Extract to `/data/local/tmp/nemesis/stage/<id>` (zip-slip `..` members are not applied).
+8. `preinstall` → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → register services → write `packages.db` → `postinstall` → start services.
 
 Logs: `nemesis log dump` and `/data/nemesis/nemesis.log`.

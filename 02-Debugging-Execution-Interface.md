@@ -96,11 +96,15 @@ Store colours:
 
 | Colour | `compat=` | Meaning |
 |--------|-----------|---------|
-| Green | `full` | Dependencies are met and the OS version matches |
-| Yellow | `partial` | Dependencies are met and the model matches, but the OS version does not |
-| Red | `incompatible` | A dependency is missing or the wrong version, or neither OS nor model matches |
+| Green | `full` | The OS version matches |
+| Yellow | `partial` | The model matches, but the OS version does not |
+| Red | `incompatible` | Neither OS nor model matches |
 
-Yellow and red rows are hidden until **show all** is on. Installing a red row asks for confirmation first, on both tabs, and then passes `--accept-risk`.
+Yellow and red rows are hidden until **show all** is on. Installing a red row asks for confirmation first, on both tabs, and then passes `--accept-risk`. A package's details page shows why it is yellow or red.
+
+Dependencies do not affect the colour. They are checked when you install, and Manager offers to install anything missing that the USB drive or the portal has. See [04 - Packages](04-Packages.md).
+
+Each row of an installed package shows a check mark with the installed version, and an update icon with the new version when one is available. The update icon at the top opens the Updates page, with a badge counting the updates, on both tabs. Manager checks once a day, and when the Store opens from a USB drive that has a package list, and offers a popup when it finds updates. A download can be cancelled from its popup.
 
 The online tab reads the catalog from xwtk.Portal. If the portal cannot be reached, one popup appears on entering the Store and the online tab is grayed out. The Store falls to the USB tab if a `type=list` stick is mounted. Downloads go to Manager's private cache, are checked against the SHA-256 the portal gives, and are deleted after the install.
 

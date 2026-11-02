@@ -31,7 +31,7 @@
     </LinearLayout>
     <ImageView
         android:id="@+id/row_check"
-        android:src="@drawable/ic_check"
+        android:src="@drawable/ic_checkbox_off"
         android:layout_width="40dp"
         android:layout_height="40dp" />
 </LinearLayout>

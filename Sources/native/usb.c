@@ -395,31 +395,24 @@ static void do_install(const char *full, char *reply, size_t cap) {
     if (inst && !framework_up()) {
         char cmd[MAX_PATH + 64];
         int rc;
-        snprintf(cmd, sizeof(cmd), "%s install --update '%s'", BIN_PATH, full);
+        snprintf(cmd, sizeof(cmd), "%s install --update --force '%s'", BIN_PATH, full);
         rc = run_cmd(cmd);
         if (reply && cap) snprintf(reply, cap, "recovery");
         usb_notify(rc == 0 ? "result_ok" : "result_fail", full, info_id, info_name,
                    nreply, sizeof(nreply));
         return;
     }
-    /* Installed, Android up: same as the Store's Update, uninstall then install. */
+    /* Installed, Android up: replace in place, so packages depending on this one stay valid. */
     if (inst) {
-        char cmd[MAX_PATH + 64];
         if (!usb_confirm("confirm_reinstall", full, info_id, info_name, reply, cap)) return;
-        /* info_id matched packages.db, so it is a validated id and safe to quote. */
-        snprintf(cmd, sizeof(cmd), "%s uninstall '%s'", BIN_PATH, info_id);
-        if (run_cmd(cmd) != 0) {
-            log_msg("usb reinstall %s: uninstall failed", info_id);
-            usb_notify("result_fail", full, info_id, info_name, nreply, sizeof(nreply));
-            return;
-        }
     } else if (!usb_confirm("confirm_install", full, info_id, info_name, reply, cap)) {
         return;
     }
     {
         char cmd[MAX_PATH + 64];
+        const char *upd = inst ? "--update " : "";
         int rc;
-        snprintf(cmd, sizeof(cmd), "%s install '%s'", BIN_PATH, full);
+        snprintf(cmd, sizeof(cmd), "%s install %s'%s'", BIN_PATH, upd, full);
         rc = run_cmd(cmd);
         /* Not marked compatible: only a user on screen may accept the risk. */
         if (rc == 20 && framework_up()) {
@@ -427,12 +420,17 @@ static void do_install(const char *full, char *reply, size_t cap) {
             am_dialog("confirm_risk", full, info_id, info_name);
             if (wait_reply(rreply, sizeof(rreply), USB_PROMPT_SEC) == 0 && reply_yes(rreply)) {
                 log_msg("install %s: user accepted compatibility risk", info_id);
-                snprintf(cmd, sizeof(cmd), "%s install --accept-risk '%s'", BIN_PATH, full);
+                snprintf(cmd, sizeof(cmd), "%s install %s--accept-risk '%s'", BIN_PATH, upd, full);
                 rc = run_cmd(cmd);
             } else {
                 log_msg("install %s: compatibility risk declined", info_id);
                 return;
             }
+        }
+        /* Dependents, dependencies or conflicts: Manager explains and offers the fix. */
+        if (rc >= 21 && rc <= 23) {
+            usb_notify("install_blocked", full, info_id, info_name, nreply, sizeof(nreply));
+            return;
         }
         usb_notify(rc == 0 ? "result_ok" : "result_fail", full, info_id, info_name,
                    nreply, sizeof(nreply));

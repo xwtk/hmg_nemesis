@@ -42,7 +42,7 @@ public class AppsActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     public void run() {
                         rows = next;
-                        checks = new CheckAdapter(AppsActivity.this, rows, checked);
+                        checks = new CheckAdapter(AppsActivity.this, rows, checked, null);
                         lv.setAdapter(checks);
                     }
                 });

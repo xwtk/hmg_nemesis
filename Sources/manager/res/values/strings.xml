@@ -47,7 +47,7 @@
     <string name="legacy_warning">This package uses an old descriptor that does not say which head units it supports. It may not be compatible with yours.</string>
     <string name="update">Update</string>
     <string name="confirm_store_install">Install \"%s\"?</string>
-    <string name="confirm_store_update">Updating requires reinstalling this package with the new version, are you sure you want to continue?</string>
+    <string name="confirm_store_update">Updating \"%s\" requires reinstalling this package with the new version, are you sure you want to continue?</string>
     <string name="trigger_button">Trigger button</string>
     <string name="trigger_hint">Three quick presses open Manager. The button\'s normal action still runs.</string>
     <string name="selected">Selected</string>
@@ -98,4 +98,18 @@
     <string name="confirm_stop">Stop \"%s\"?</string>
     <string name="title">NEMESIS</string>
     <string name="credit">By Gor Mirzoyan (xwtk.cloud)</string>
+    <string name="cancel">Cancel</string>
+    <string name="view">View</string>
+    <string name="not_now">Not now</string>
+    <string name="downloading_named">Downloading \"%s\"…</string>
+    <string name="installing_named">Installing \"%s\"…</string>
+    <string name="updates">Updates</string>
+    <string name="updates_empty">No updates available.</string>
+    <string name="pkg_updates_one">Updates are ready to be installed for 1 package.</string>
+    <string name="pkg_updates_many">Updates are ready to be installed for %d packages.</string>
+    <string name="confirm_deps" formatted="false">\"%n\" needs these packages:%s\n\nInstall them, then \"%n\"?</string>
+    <string name="deps_update_from"> (update from %s)</string>
+    <string name="deps_unmet" formatted="false">\"%n\" needs these packages:%s\n\nInstall or update them from Package Store or a USB drive, then try again.</string>
+    <string name="install_conflict" formatted="false">\"%n\" is incompatible with these installed packages. Uninstall them first:%s</string>
+    <string name="update_blocked" formatted="false">This version of \"%n\" does not fit other installed packages that need it. Update or uninstall them first:%s</string>
 </resources>

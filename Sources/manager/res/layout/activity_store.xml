@@ -74,6 +74,30 @@
                 android:minWidth="60dp"
                 android:layout_width="wrap_content"
                 android:layout_height="56dp" />
+            <FrameLayout
+                android:id="@+id/btn_updates"
+                android:background="@drawable/co_bt_title"
+                android:clickable="true"
+                android:layout_width="64dp"
+                android:layout_height="56dp">
+                <ImageView
+                    android:src="@drawable/ic_update"
+                    android:layout_gravity="center"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp" />
+                <TextView
+                    android:id="@+id/updates_badge"
+                    android:background="@drawable/badge_bg"
+                    android:textSize="14sp"
+                    android:textColor="#ffffffff"
+                    android:gravity="center"
+                    android:minWidth="22dp"
+                    android:visibility="gone"
+                    android:layout_gravity="top|right"
+                    android:layout_margin="2dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="22dp" />
+            </FrameLayout>
         </LinearLayout>
         <FrameLayout
             android:layout_width="match_parent"

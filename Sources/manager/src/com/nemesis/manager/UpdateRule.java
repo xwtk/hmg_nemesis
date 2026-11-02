@@ -25,27 +25,61 @@ final class UpdateRule {
 
     /**
      * May Manager use this connection? activeType is ConnectivityManager's, -1 for none.
-     * shortcut: interface names are not confirmed on a real unit and the SIM's type is
-     * unknown; adjust once network.log from a unit shows them.
+     * Traffic follows the default route on KitKat, so its name decides and activeType
+     * only settles a name not known here; the unit can report a hotspot as mobile.
+     * shortcut: interface names are not confirmed on a real unit, and a telematics modem
+     * named usb* or eth* would pass; adjust once network.log from a unit shows them.
      */
     static boolean networkAllowed(boolean telematics, int activeType, String routeIface) {
         if (telematics) return true;
-        if (activeType == 1 || activeType == 7) return true; // Wi-Fi, Bluetooth tether
-        if (activeType == 0 || (activeType >= 2 && activeType <= 6)) return false; // mobile
-        if (routeIface == null) return false;
-        return routeIface.startsWith("wlan") || routeIface.startsWith("bnep")
-                || routeIface.startsWith("usb") || routeIface.startsWith("rndis");
+        if (nameIn(routeIface, SIM_IFACES)) return false;
+        if (nameIn(routeIface, HOTSPOT_IFACES)) return true;
+        return activeType == 1 || activeType == 7 || activeType == 9; // Wi-Fi, Bluetooth, Ethernet
     }
 
-    /** The default route's interface in /proc/net/route text, or null. */
+    private static final String[] SIM_IFACES = {
+        "rmnet", "ccmni", "pdp", "ppp", "wwan", "qmi", "cdma", "uwbr"
+    };
+    private static final String[] HOTSPOT_IFACES = { "wlan", "bnep", "usb", "rndis", "ncm", "eth", "en" };
+
+    private static boolean nameIn(String iface, String[] prefixes) {
+        if (iface == null) return false;
+        for (int i = 0; i < prefixes.length; i++) {
+            if (iface.startsWith(prefixes[i])) return true;
+        }
+        return false;
+    }
+
+    /** The lowest metric default route's interface in /proc/net/route text, or null. */
     static String defaultRouteIface(String procNetRoute) {
         if (procNetRoute == null) return null;
         String[] lines = procNetRoute.split("\n");
+        String best = null;
+        int bestMetric = 0;
         for (int i = 0; i < lines.length; i++) {
             String[] f = lines[i].trim().split("\\s+");
-            if (f.length >= 2 && "00000000".equals(f[1])) return f[0];
+            if (f.length < 2 || !"00000000".equals(f[1])) continue;
+            int metric = f.length > 6 ? number(f[6]) : 0;
+            if (best == null || metric < bestMetric) {
+                best = f[0];
+                bestMetric = metric;
+            }
         }
-        return null;
+        return best;
+    }
+
+    /** Java form of native dep_spec_match: any, >=v, <=v, a-b or an exact version. */
+    static boolean specMatch(String spec, String have) {
+        if (spec == null || spec.length() == 0 || "any".equals(spec)) return true;
+        if (have == null || !have.matches("[0-9]+(\\.[0-9]+)*")) return false;
+        if (spec.startsWith(">=")) return compare(have, spec.substring(2)) >= 0;
+        if (spec.startsWith("<=")) return compare(have, spec.substring(2)) <= 0;
+        int dash = spec.indexOf('-');
+        if (dash >= 0) {
+            return compare(have, spec.substring(0, dash)) >= 0
+                    && compare(have, spec.substring(dash + 1)) <= 0;
+        }
+        return compare(have, spec) == 0;
     }
 
     /** Dotted numeric compare, like native ver_cmp. */

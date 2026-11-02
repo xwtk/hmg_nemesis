@@ -75,6 +75,21 @@ def check(d):
     line(d, [(26, 66), (54, 94), (102, 36)], 14)
 
 
+def checkbox_off(d):
+    d.rounded_rectangle(box(24, 24, 104, 104), radius=10 * S, outline=FG, width=8 * S)
+
+
+def checkbox_on(d):
+    checkbox_off(d)
+    line(d, [(42, 64), (58, 82), (88, 44)], 10)
+
+
+def update(d):
+    d.ellipse(box(18, 18, 110, 110), outline=FG, width=8 * S)
+    line(d, [(64, 88), (64, 42)], 9)
+    line(d, [(44, 62), (64, 42), (84, 62)], 9)
+
+
 def render(name, draw, tile=True):
     im = Image.new("RGBA", (SIZE * S, SIZE * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
@@ -93,6 +108,9 @@ def main() -> None:
     render("ic_home_engineering", engineering)
     render("ic_home_dealer", dealer)
     render("ic_check", check, tile=False)
+    render("ic_checkbox_off", checkbox_off, tile=False)
+    render("ic_checkbox_on", checkbox_on, tile=False)
+    render("ic_update", update, tile=False)
 
 
 if __name__ == "__main__":

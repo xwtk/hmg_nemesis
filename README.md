@@ -69,7 +69,7 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.2.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.3.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
@@ -78,6 +78,16 @@ OR
 **Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
 
 ## **Changelog**
+
+### 1.16.3
+
+- **Package dependencies.** A dependency can be updated while packages that need it stay installed, as long as the new version still suits them. A package with unmet dependencies is no longer marked incompatible: it keeps its compatibility colour and the install stops with a message saying what to install or update.
+- **Incompatibilities.** Put `!id` in `depends` (for example `depends="base@>=1.0,!other"`) for a package that cannot be installed together with yours.
+- **Dependency install.** If the missing dependencies are on the USB drive or the Package Store, Manager lists them and installs them before the package.
+- **Package Store.** Rows show a check mark with the installed version, and an update icon with the new version. Downloads can be cancelled. A details page shows why a package is yellow or red.
+- **Package updates.** Manager checks once a day, and when the Store opens from a USB drive with a package list, then offers an Updates page with a count badge on both tabs. The USB update question names the package.
+- **Hotspot.** USB and Bluetooth hotspot connections work without Use Telematics Internet.
+- **Manager.** Checkable rows show a checkbox.
 
 ### 1.16.2
 

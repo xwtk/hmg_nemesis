@@ -89,8 +89,11 @@ public class StoreDetailActivity extends Activity {
         if (desc.length() > 0) sb.append("\n\n").append(desc);
         ((TextView) findViewById(R.id.log_text)).setText(sb);
         TextView warn = (TextView) findViewById(R.id.warning);
-        warn.setText(R.string.legacy_warning);
-        warn.setVisibility(e.legacy ? View.VISIBLE : View.GONE);
+        // Says why a row is yellow or red: it is the text the car itself compared.
+        String why = e.compat != StoreList.FULL ? e.reasons : "";
+        String legacy = e.legacy ? getString(R.string.legacy_warning) : "";
+        warn.setText(legacy.length() > 0 && why.length() > 0 ? legacy + "\n" + why : legacy + why);
+        warn.setVisibility(e.legacy || why.length() > 0 ? View.VISIBLE : View.GONE);
         boolean known = e.compat != StoreList.UNKNOWN && !e.locked;
         boolean differs = e.isInstalled && UpdateRule.compare(e.version, e.installed) != 0;
         Button a = (Button) findViewById(R.id.btn_a);
@@ -103,15 +106,7 @@ public class StoreDetailActivity extends Activity {
 
     private void onInstall() {
         StoreList.Entry e = entry;
-        Intent i = new Intent(this, DialogActivity.class);
-        i.putExtra("nemesis_name", e.name);
-        if (root != null) {
-            i.putExtra("nemesis_path", root + "/" + e.path);
-        } else {
-            i.putExtra("nemesis_url", e.url);
-            i.putExtra("nemesis_sha256", e.sha256);
-        }
-        if (e.isInstalled) i.putExtra("nemesis_replace", e.id);
+        Intent i = DialogActivity.storeIntent(this, e);
         // An incompatible package gets the risk popup from either tab, update or not.
         if (e.compat == StoreList.NONE) {
             i.putExtra("nemesis_mode", "confirm_risk");

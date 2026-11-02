@@ -330,6 +330,34 @@ static int print_dependents(const char *id, const char *newver) {
     return hits;
 }
 
+/*
+ * Installed packages that cannot sit next to `m`, whichever side declared it.
+ * Prints "conflict <id>|<name>" per hit; returns the count.
+ */
+static int print_conflicts(const pkg_meta *m) {
+    pkg_rec *list = NULL;
+    int n = 0, i, hits = 0;
+    pkg_list_load(&list, &n);
+    for (i = 0; i < n; i++) {
+        pkg_meta o;
+        char spec[64], have[32] = "";
+        int theirs;
+        if (!strcmp(list[i].id, m->id)) continue;
+        theirs = installed_meta(list[i].id, &o) == 0;
+        if (theirs) snprintf(have, sizeof(have), "%s", o.pkg_ver);
+        if ((meta_conflict_spec(m->depends, list[i].id, spec, sizeof(spec)) &&
+             dep_spec_match(spec, have)) ||
+            (theirs && meta_conflict_spec(o.depends, m->id, spec, sizeof(spec)) &&
+             dep_spec_match(spec, m->pkg_ver))) {
+            printf("conflict %s|%s\n", list[i].id, list[i].name);
+            hits++;
+        }
+    }
+    free(list);
+    fflush(stdout);
+    return hits;
+}
+
 static int safe_pkg_name(const char *s, char *out, size_t cap) {
     size_t i;
     if (!s || !*s || !out || cap < 2) return -1;
@@ -693,7 +721,7 @@ int package_root(const char *stage, char *out, size_t cap) {
 }
 
 int cmd_install(int argc, char **argv) {
-    int update = 0, i, locked_exist = 0, accept_risk = 0, compat, core = 0;
+    int update = 0, i, locked_exist = 0, accept_risk = 0, compat, core = 0, force = 0;
     const char *zip = NULL;
     char stage[MAX_PATH], stage_top[MAX_PATH], reasons[1024];
     const char *id;
@@ -705,10 +733,11 @@ int cmd_install(int argc, char **argv) {
         if (!strcmp(argv[i], "--update")) update = 1;
         else if (!strcmp(argv[i], "--accept-risk")) accept_risk = 1;
         else if (!strcmp(argv[i], "--core")) core = 1;
+        else if (!strcmp(argv[i], "--force")) force = 1;
         else if (argv[i][0] != '-') zip = argv[i];
     }
     if (!zip) {
-        fprintf(stderr, "usage: nemesis install [--update] [--core] [--accept-risk] <zip>\n");
+        fprintf(stderr, "usage: nemesis install [--update] [--core] [--force] [--accept-risk] <zip>\n");
         return 1;
     }
     if (!is_file(zip)) {
@@ -737,6 +766,20 @@ int cmd_install(int argc, char **argv) {
                 id, meta.pkg_ver[0] ? meta.pkg_ver : "(no version)");
         ini_free(&ini);
         return 21;
+    }
+    if (!core && print_conflicts(&meta) > 0) {
+        fprintf(stderr, "install blocked: uninstall the packages %s is incompatible with\n", id);
+        ini_free(&ini);
+        return 23;
+    }
+    reasons[0] = 0;
+    if (!core && meta_deps_unmet(&meta, installed_version, reasons, sizeof(reasons)) > 0) {
+        printf("%s", reasons);
+        fflush(stdout);
+        fprintf(stderr, "install blocked: %s needs the dependencies above. "
+                        "Install or update them, then install it again.\n", id);
+        ini_free(&ini);
+        return 22;
     }
     compat = pkg_compat(&meta, reasons, sizeof(reasons));
     if (compat == COMPAT_NONE && !accept_risk) {
@@ -776,8 +819,19 @@ int cmd_install(int argc, char **argv) {
         snprintf(oldmeta, sizeof(oldmeta), "%s/NEMESIS.data", oldroot);
         stop_pkg_services(id);
         if (is_file(oldmeta) && ini_load(&oldini, oldmeta) == 0) {
-            run_named_hook(&oldini, oldroot, "preuninstall");
-            pm_uninstall_apks(&oldini, oldroot);
+            /* Same rule as uninstall: a failed removal keeps the old version
+             * working. --core and --force (recovery, Android down) carry on. */
+            int hook = run_named_hook(&oldini, oldroot, "preuninstall");
+            int apks = hook && !core && !force ? 0 : pm_uninstall_apks(&oldini, oldroot);
+            if ((hook || apks) && !core && !force) {
+                log_msg("update %s: old version could not be removed", id);
+                fprintf(stderr, "update failed: %s: old version could not be removed\n", id);
+                ini_free(&oldini);
+                ini_free(&ini);
+                rm_rf(stage_top);
+                start_pkg_services(id);
+                return 5;
+            }
             svc_remove_prefix(id);
             run_named_hook(&oldini, oldroot, "postuninstall");
             ini_free(&oldini);
@@ -790,6 +844,12 @@ int cmd_install(int argc, char **argv) {
     i = do_fresh_install(stage, &ini, id, meta.name, meta.types, core);
     ini_free(&ini);
     rm_rf(stage_top);
+    /* The old version is gone: do not keep listing a package with no files. */
+    if (i != 0 && have_existing) {
+        char left[MAX_PATH];
+        snprintf(left, sizeof(left), "%s/%s/NEMESIS.data", NEMESIS_APPS, id);
+        if (!is_file(left)) pkg_remove(id);
+    }
     if (i == 0) fprintf(stdout, "ok %s %s\n", have_existing ? "updated" : "installed", id);
     return i;
 }
@@ -855,8 +915,13 @@ int cmd_pkg_info(const char *arg) {
     if (inst) installed_version(m.id, have, sizeof(have));
     printf("installed=%d\ninstalled-version=%s\nlocked=%d\n", inst, have, inst ? rec.locked : 0);
     c = pkg_compat(&m, reasons, sizeof(reasons));
-    printf("compat=%s\n", compat_name(c));
+    printf("compat=%s\n%s", compat_name(c), reasons);
     fflush(stdout);
+    /* For a zip: what else would stop installing it right now. */
+    if (is_file(arg)) {
+        if (inst) print_dependents(m.id, m.pkg_ver[0] ? m.pkg_ver : "0");
+        print_conflicts(&m);
+    }
     return 0;
 }
 

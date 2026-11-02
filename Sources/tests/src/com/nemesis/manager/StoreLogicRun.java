@@ -21,6 +21,9 @@ public class StoreLogicRun {
         defaultFilterHidesPartialAndNone();
         sorting();
         dateSortsToTheSecond();
+        reasonsAndInstalled();
+        updatesPicksNewest();
+        depPlanOrder();
         if (failed != 0) {
             System.err.println("FAIL: " + failed + " store logic checks");
             System.exit(1);
@@ -41,14 +44,25 @@ public class StoreLogicRun {
         check(UpdateRule.networkAllowed(false, 7, "bnep0"), "Bluetooth hotspot by default");
         check(UpdateRule.networkAllowed(false, 9, "usb0"), "USB hotspot by default");
         check(UpdateRule.networkAllowed(false, -1, "rndis0"), "USB tether with no active type");
-        check(!UpdateRule.networkAllowed(false, 0, "usb0"), "mobile type is off, whatever the name");
-        check(!UpdateRule.networkAllowed(false, 5, "wlan0"), "hipri is off");
+        check(UpdateRule.networkAllowed(false, 0, "usb0"), "USB hotspot reported as mobile");
+        check(UpdateRule.networkAllowed(false, 0, "eth0"), "USB Ethernet hotspot reported as mobile");
+        check(UpdateRule.networkAllowed(false, 5, "wlan0"), "the route decides, not hipri");
+        check(!UpdateRule.networkAllowed(false, 1, "rmnet0"), "SIM route is off even with Wi-Fi active");
         check(!UpdateRule.networkAllowed(false, -1, "rmnet0"), "SIM interface is off");
+        check(!UpdateRule.networkAllowed(false, 0, "odd0"), "unknown name on mobile is off");
+        check(UpdateRule.networkAllowed(false, 1, "odd0"), "unknown name on Wi-Fi is on");
         check(!UpdateRule.networkAllowed(false, -1, null), "no route is off");
         check(UpdateRule.networkAllowed(true, 0, "rmnet0"), "Use Telematics Internet allows the SIM");
         String routes = "Iface\tDestination\tGateway\nwlan0\t0001A8C0\t00000000\nrmnet0\t00000000\t0101A8C0\n";
         check("rmnet0".equals(UpdateRule.defaultRouteIface(routes)), "default route interface");
         check(UpdateRule.defaultRouteIface("Iface\tDestination\nwlan0\t0001A8C0\n") == null, "no default route");
+        String metrics = "rmnet0\t00000000\t01\t0003\t0\t0\t100\t00000000\nusb0\t00000000\t01\t0003\t0\t0\t5\t00000000\n";
+        check("usb0".equals(UpdateRule.defaultRouteIface(metrics)), "lowest metric default route");
+        check(UpdateRule.specMatch("any", "") && UpdateRule.specMatch("", null), "any spec");
+        check(UpdateRule.specMatch(">=1.2", "1.10") && !UpdateRule.specMatch(">=1.2", "1.1"), "at least");
+        check(UpdateRule.specMatch("<=2.0", "2") && !UpdateRule.specMatch("<=2.0", "2.1"), "at most");
+        check(UpdateRule.specMatch("1.0-2.0", "1.5") && !UpdateRule.specMatch("1.0-2.0", "2.1"), "range");
+        check(UpdateRule.specMatch("1.0", "1.0.0") && !UpdateRule.specMatch("1.0", ""), "exact");
         check(UpdateRule.compare("1.16.1", "1.16") > 0, "1.16.1 is newer than 1.16");
         check(UpdateRule.compare("1.16", "1.15") > 0, "1.16 is newer than 1.15");
         check(UpdateRule.compare("1.9", "1.10") < 0, "numeric, not text");
@@ -161,6 +175,90 @@ public class StoreLogicRun {
         check("alpha".equals(v.get(0).name), "name ascending ignores case");
         v = StoreList.view(all, "", true, false, false);
         check("Gamma".equals(v.get(0).name), "name descending");
+    }
+
+    private static void reasonsAndInstalled() {
+        String out = "compat=partial\ndep-missing a\nos=any\nos X not in Y\nmodel m not in n\n";
+        check("Software X not in Y\nCar model m not in n".equals(StoreList.reasons(out)), "readable reasons only");
+        check("".equals(StoreList.reasons(null)), "no reasons");
+        java.util.Map<String, String> m = StoreList.parseInstalled("a|A|0|tool|1.2|desc\nb|B|1|tool||\nbad\n");
+        check("1.2".equals(m.get("a")) && "".equals(m.get("b")) && m.size() == 2, "pkg-list versions");
+    }
+
+    private static StoreList.Entry update(String id, String have, String ver, String zip) {
+        StoreList.Entry e = row(id, "", StoreList.FULL);
+        e.id = id;
+        e.isInstalled = true;
+        e.installed = have;
+        e.version = ver;
+        e.localZip = zip;
+        return e;
+    }
+
+    private static void updatesPicksNewest() {
+        List<StoreList.Entry> all = new ArrayList<StoreList.Entry>();
+        all.add(update("a", "1.0", "1.1", ""));
+        all.add(update("a", "1.0", "1.1", "/usb/a.zip"));
+        all.add(update("b", "1.0", "2.0", "/usb/b.zip"));
+        all.add(update("b", "1.0", "3.0", ""));
+        all.add(update("same", "1.0", "1.0", ""));
+        all.add(update("older", "2.0", "1.0", ""));
+        StoreList.Entry locked = update("locked", "1.0", "2.0", "");
+        locked.locked = true;
+        all.add(locked);
+        StoreList.Entry red = update("red", "1.0", "2.0", "");
+        red.compat = StoreList.NONE;
+        all.add(red);
+        StoreList.Entry fresh = update("fresh", "", "2.0", "");
+        fresh.isInstalled = false;
+        all.add(fresh);
+        List<StoreList.Entry> u = StoreList.updates(all);
+        check(u.size() == 2, "only real updates");
+        check("/usb/a.zip".equals(u.get(0).localZip), "the stick wins a tie");
+        check("3.0".equals(u.get(1).version), "newest wins");
+    }
+
+    private static StoreList.Entry dep(String id, String ver, String depends) {
+        StoreList.Entry e = new StoreList.Entry();
+        e.id = id;
+        e.version = ver;
+        e.depends = depends;
+        return e;
+    }
+
+    private static void depPlanOrder() {
+        final java.util.Map<String, String> have = new java.util.HashMap<String, String>();
+        have.put("old", "1.0");
+        have.put("ok", "2.0");
+        have.put("bad", "1.5");
+        final java.util.Map<String, StoreList.Entry> store = new java.util.HashMap<String, StoreList.Entry>();
+        store.put("a", dep("a", "1.0", "b, self"));
+        store.put("b", dep("b", "1.0", "a"));
+        store.put("old", dep("old", "2.0", ""));
+        DepPlan.Source s = new DepPlan.Source() {
+            public String installed(String id) {
+                return have.get(id);
+            }
+
+            public StoreList.Entry find(String id, String spec) {
+                StoreList.Entry e = store.get(id);
+                return e != null && UpdateRule.specMatch(spec, e.version) ? e : null;
+            }
+        };
+        DepPlan p = DepPlan.of("self", "a, ok@>=1, old@>=2", s);
+        check(p.steps.size() == 3 && p.missing.isEmpty(), "a, b and old are steps; no loop");
+        check("b".equals(p.steps.get(0).id) && "a".equals(p.steps.get(1).id), "dependencies first");
+        p = DepPlan.of("self", "none, nine@>=9, ok@>=9, old@>=9", s);
+        check(p.steps.isEmpty() && p.missing.size() == 4, "nothing in any Store");
+        check("none".equals(p.missing.get(0)), "missing, any version");
+        check("nine (need >=9)".equals(p.missing.get(1)), "missing, needs a version");
+        check("ok (have 2.0, need >=9)".equals(p.missing.get(2)), "installed too old");
+        p = DepPlan.of("self", "!ok, !bad@>=2, !absent, !old@<=1.0", s);
+        check(p.steps.isEmpty() && p.missing.isEmpty(), "! items are not dependencies");
+        check(p.conflicts.size() == 2 && p.conflicts.contains("ok") && p.conflicts.contains("old"), "installed conflicts only");
+        List<String> u = DepPlan.unmet("noise\ndep-missing a\ndep-version b have 1.0 need >=2\ndep-version c have unknown need 1\n");
+        check(u.size() == 3 && "a".equals(u.get(0)) && "b (have 1.0, need >=2)".equals(u.get(1))
+                && "c (have no version, need 1)".equals(u.get(2)), "native dep lines");
     }
 
     private static void check(boolean cond, String msg) {

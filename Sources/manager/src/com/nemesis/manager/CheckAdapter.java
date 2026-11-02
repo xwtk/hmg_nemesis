@@ -11,16 +11,18 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Rows with a checkmark on the right, for Auto-launch. */
+/** Rows with a checkbox on the right. `checkable` names the rows that have one; null means all. */
 final class CheckAdapter extends BaseAdapter {
     private final LayoutInflater inf;
     private final ArrayList<TwoLineAdapter.Row> rows;
     private final List<String> checked;
+    private final List<String> checkable;
 
-    CheckAdapter(Context ctx, ArrayList<TwoLineAdapter.Row> rows, List<String> checked) {
+    CheckAdapter(Context ctx, ArrayList<TwoLineAdapter.Row> rows, List<String> checked, List<String> checkable) {
         this.inf = LayoutInflater.from(ctx);
         this.rows = rows;
         this.checked = checked;
+        this.checkable = checkable;
     }
 
     public int getCount() {
@@ -40,8 +42,9 @@ final class CheckAdapter extends BaseAdapter {
         TwoLineAdapter.Row r = rows.get(pos);
         ((TextView) v.findViewById(R.id.row_title)).setText(r.title);
         ((TextView) v.findViewById(R.id.row_summary)).setText(r.summary);
-        ((ImageView) v.findViewById(R.id.row_check))
-                .setVisibility(checked.contains(r.key) ? View.VISIBLE : View.INVISIBLE);
+        ImageView box = (ImageView) v.findViewById(R.id.row_check);
+        box.setVisibility(checkable == null || checkable.contains(r.key) ? View.VISIBLE : View.GONE);
+        box.setImageResource(checked.contains(r.key) ? R.drawable.ic_checkbox_on : R.drawable.ic_checkbox_off);
         return v;
     }
 }

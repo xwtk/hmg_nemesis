@@ -26,7 +26,7 @@ depends=""
 ```
 
 - `id` is yours once you submit it. Nobody else can use it, in any spelling.
-- `os`, `models` and `depends` decide the compatibility color each user sees, so set them to what you tested.
+- `os` and `models` decide the compatibility color each user sees, so set them to what you tested. `depends` is checked at install. Put `!id` in it for a package yours cannot be installed with.
 - A package with an older descriptor is still accepted. It is shown in yellow with a warning that it may not be compatible, for every user.
 
 The full format and the builder are in [04 - Packages](04-Packages.md).

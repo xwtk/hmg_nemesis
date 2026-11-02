@@ -167,6 +167,21 @@ static void test_meta(void) {
     ini_free(&ini);
     CHECK(parse("[nemesis]\nid=x\ndepends=x\n", &ini, &m, err, sizeof(err)) != 0, "self dep");
     ini_free(&ini);
+    CHECK(parse("[nemesis]\nid=x\ndepends=!x\n", &ini, &m, err, sizeof(err)) != 0, "self conflict");
+    ini_free(&ini);
+    CHECK(parse("[nemesis]\nid=x\ndepends=!a@>=1.x\n", &ini, &m, err, sizeof(err)) != 0, "bad conflict spec");
+    ini_free(&ini);
+    CHECK(parse("[nemesis]\nid=x\ndepends=a,!a\n", &ini, &m, err, sizeof(err)) != 0, "needs and refuses");
+    ini_free(&ini);
+    CHECK(parse("[nemesis]\nid=x\ndepends=a@>=1, !b@<=2.0\n", &ini, &m, err, sizeof(err)) == 0, "mixed depends");
+    {
+        char spec[64], reasons[128] = "";
+        CHECK(!meta_depends_on(m.depends, "b"), "!b is not a dependency");
+        CHECK(meta_conflict_spec(m.depends, "b", spec, sizeof(spec)) && !strcmp(spec, "<=2.0"), "!b spec");
+        CHECK(!meta_conflict_spec(m.depends, "a", spec, sizeof(spec)), "a is not a conflict");
+        CHECK(meta_deps_unmet(&m, NULL, reasons, sizeof(reasons)) == 1 && !strstr(reasons, "b"), "only a is unmet");
+    }
+    ini_free(&ini);
     CHECK(parse("[nemesis]\nname=x\n", &ini, &m, err, sizeof(err)) != 0, "missing id");
     ini_free(&ini);
 }
@@ -219,14 +234,20 @@ static void test_compat(void) {
     CHECK(strstr(r, "os ") != NULL, "partial reason '%s'", r);
     CHECK(compat_of("[nemesis]\nid=a\nos=ECOKMC.EUR.*\nmodels=nq5_us\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE,
           "neither = incompatible");
-    CHECK(compat_of("[nemesis]\nid=a\ndepends=missing.pkg\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE &&
-          strstr(r, "dep-missing missing.pkg"), "missing dep '%s'", r);
-    CHECK(compat_of("[nemesis]\nid=a\ndepends=adb.tcp@>=2.0\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE &&
-          strstr(r, "dep-version adb.tcp have 1.2.0 need >=2.0"), "dep version '%s'", r);
+    CHECK(compat_of("[nemesis]\nid=a\ndepends=missing.pkg\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL &&
+          strstr(r, "dep-missing missing.pkg"), "missing dep is only a reason '%s'", r);
+    CHECK(compat_of("[nemesis]\nid=a\ndepends=adb.tcp@>=2.0\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL &&
+          strstr(r, "dep-version adb.tcp have 1.2.0 need >=2.0"), "dep version is only a reason '%s'", r);
     CHECK(compat_of("[nemesis]\nid=a\ndepends=\"adb.tcp@1.0-1.5, busybox, noversion@any\"\n", os, "x", r, sizeof(r)) ==
           COMPAT_FULL, "deps satisfied '%s'", r);
-    CHECK(compat_of("[nemesis]\nid=a\ndepends=noversion@1.0\n", os, "x", r, sizeof(r)) == COMPAT_NONE &&
+    CHECK(compat_of("[nemesis]\nid=a\ndepends=noversion@1.0\n", os, "x", r, sizeof(r)) == COMPAT_FULL &&
           strstr(r, "have unknown"), "unversioned dep '%s'", r);
+    CHECK(compat_of("[nemesis]\nid=a\nos=\"ECOKMC.USA.*.260507\"\nmodels=cvev_us\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
+          "wildcard in the middle '%s'", r);
+    CHECK(compat_of("[nemesis]\nid=a\nos=\"x, ecokmc.usa.????.*.260507\"\nmodels=none\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
+          "list, any case, ? '%s'", r);
+    CHECK(compat_of("[nemesis]\nid=a\nos=ECOKMC.USA.*.260903\nmodels=CVEV_*\n", os, "cvev_us", r, sizeof(r)) == COMPAT_PARTIAL,
+          "other firmware, same car '%s'", r);
 }
 
 static void test_escape(void) {

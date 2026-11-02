@@ -2,7 +2,7 @@
 
 static void usage(void) {
     fprintf(stderr,
-            "nemesis install [--update] [--core] [--accept-risk] <zip>\n"
+            "nemesis install [--update] [--core] [--force] [--accept-risk] <zip>\n"
             "nemesis uninstall [--force] <package-id>\n"
             "nemesis pkg-list\n"
             "nemesis pkg-info <zip|package-id>\n"

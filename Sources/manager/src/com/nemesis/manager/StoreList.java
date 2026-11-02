@@ -30,6 +30,11 @@ final class StoreList {
         int compat = UNKNOWN;
         String url = "";
         String sha256 = "";
+        String depends = "";
+        /** Set for a zip on the stick; such a row needs no download. */
+        String localZip = "";
+        /** The os and model lines of the verdict, one per line. */
+        String reasons = "";
     }
 
     private StoreList() {
@@ -124,6 +129,46 @@ final class StoreList {
     /** The colour a row gets. Stays listed by default, unlike a real PARTIAL. */
     static int shade(Entry e) {
         return e.legacy && e.compat == FULL ? PARTIAL : e.compat;
+    }
+
+    /** Why the unit did not match, readable, from pkg-info or compat-check output. */
+    static String reasons(String out) {
+        StringBuilder sb = new StringBuilder();
+        String[] lines = out == null ? new String[0] : out.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String ln = lines[i].trim();
+            String text = ln.startsWith("os ") ? "Software " + ln.substring(3)
+                    : ln.startsWith("model ") ? "Car model " + ln.substring(6) : null;
+            if (text == null) continue;
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(text);
+        }
+        return sb.toString();
+    }
+
+    /** id to package-version from pkg-list: id|name|locked|types|package-version|short-desc. */
+    static Map<String, String> parseInstalled(String text) {
+        Map<String, String> out = new HashMap<String, String>();
+        String[] lines = text == null ? new String[0] : text.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String[] f = lines[i].split("\\|", -1);
+            if (f.length >= 5 && f[0].trim().length() > 0) out.put(f[0].trim(), f[4].trim());
+        }
+        return out;
+    }
+
+    /** The row a package would be updated from: newest per id, the stick's on a tie. */
+    static List<Entry> updates(List<Entry> rows) {
+        Map<String, Entry> best = new java.util.LinkedHashMap<String, Entry>();
+        for (int i = 0; i < rows.size(); i++) {
+            Entry e = rows.get(i);
+            if (!e.isInstalled || e.locked || e.compat == NONE || e.compat == UNKNOWN) continue;
+            if (UpdateRule.compare(e.version, e.installed) <= 0) continue;
+            Entry had = best.get(e.id);
+            int c = had == null ? 1 : UpdateRule.compare(e.version, had.version);
+            if (c > 0 || (c == 0 && had.localZip.length() == 0 && e.localZip.length() > 0)) best.put(e.id, e);
+        }
+        return new ArrayList<Entry>(best.values());
     }
 
     static boolean matches(Entry e, String query) {

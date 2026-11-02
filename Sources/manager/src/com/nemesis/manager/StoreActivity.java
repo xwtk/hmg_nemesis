@@ -45,6 +45,10 @@ public class StoreActivity extends Activity {
     private boolean ascending;
     private int loadGen;
     private int resolveGen;
+    /** Opened by a list stick: its popup goes first, and online being down is no news. */
+    private boolean fromUsb;
+    /** The stick's one package update check, spent on the first load. */
+    private boolean usbLaunchCheck;
     private final RowAdapter adapter = new RowAdapter();
 
     @Override
@@ -57,6 +61,13 @@ public class StoreActivity extends Activity {
         }
         Ui.bindTitle(this, R.string.store);
         usbTab = "usb".equals(getIntent().getStringExtra("store_mode"));
+        fromUsb = usbTab;
+        usbLaunchCheck = usbTab;
+        click(R.id.btn_updates, new Runnable() {
+            public void run() {
+                startActivity(new Intent(StoreActivity.this, UpdatesActivity.class));
+            }
+        });
         ListView lv = (ListView) findViewById(R.id.list);
         lv.setAdapter(adapter);
         lv.setEmptyView(findViewById(R.id.empty));
@@ -159,7 +170,7 @@ public class StoreActivity extends Activity {
                         if (gen != loadGen || isFinishing()) return;
                         onlineOk = onlineFinal != null;
                         onlineRows = onlineOk ? onlineFinal : new ArrayList<StoreList.Entry>();
-                        if (!onlineOk && !offlineShown) {
+                        if (!onlineOk && !offlineShown && !(fromUsb && usbOk)) {
                             offlineShown = true;
                             Intent i = new Intent(StoreActivity.this, DialogActivity.class);
                             i.putExtra("nemesis_mode", "result_fail");
@@ -172,6 +183,17 @@ public class StoreActivity extends Activity {
                         } else {
                             refresh();
                         }
+                    }
+                });
+                final int count = PkgUpdates.find(StoreActivity.this).updates.size();
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (gen != loadGen || isFinishing()) return;
+                        TextView badge = (TextView) findViewById(R.id.updates_badge);
+                        badge.setText(String.valueOf(count));
+                        badge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+                        if (usbLaunchCheck && usbOk && count > 0) PkgUpdates.popup(StoreActivity.this, count);
+                        usbLaunchCheck = false;
                     }
                 });
             }
@@ -208,7 +230,8 @@ public class StoreActivity extends Activity {
     }
 
     static void resolveUsb(StoreList.Entry e, String root) {
-        Cli.Result r = Cli.exec("pkg-info", root + "/" + e.path);
+        e.localZip = root + "/" + e.path;
+        Cli.Result r = Cli.exec("pkg-info", e.localZip);
         if (r.rc != 0) {
             e.compat = StoreList.NONE;
             return;
@@ -222,6 +245,8 @@ public class StoreActivity extends Activity {
         e.compat = StoreList.compatOf(m.get("compat"));
         e.legacy = StoreList.isLegacy(m.get("version"));
         e.detailedDesc = PackageActivity.unescape(or(m.get("detailed-desc"), ""));
+        e.depends = or(m.get("depends"), "");
+        e.reasons = StoreList.reasons(r.out);
     }
 
     static void resolveOnline(Context ctx, StoreList.Entry e) throws Exception {
@@ -235,9 +260,11 @@ public class StoreActivity extends Activity {
         e.isInstalled = "1".equals(m.get("installed"));
         e.installed = or(m.get("installed-version"), "");
         e.locked = "1".equals(m.get("locked"));
-        Map<String, String> c = Cli.fields(Cli.run("compat-check", d.optString("os", "any"),
-                d.optString("models", "any"), d.optString("depends", "")));
-        e.compat = StoreList.compatOf(c.get("compat"));
+        e.depends = d.optString("depends", "");
+        if (e.name.length() == 0) e.name = d.optString("name", e.id);
+        String verdict = Cli.run("compat-check", d.optString("os", "any"), d.optString("models", "any"), e.depends);
+        e.compat = StoreList.compatOf(Cli.fields(verdict).get("compat"));
+        e.reasons = StoreList.reasons(verdict);
     }
 
     private static String or(String v, String d) {
@@ -294,12 +321,16 @@ public class StoreActivity extends Activity {
 
         public View getView(int pos, View convert, ViewGroup parent) {
             View v = convert != null ? convert
-                    : LayoutInflater.from(StoreActivity.this).inflate(R.layout.list_row, parent, false);
+                    : LayoutInflater.from(StoreActivity.this).inflate(R.layout.store_row, parent, false);
             StoreList.Entry e = shown.get(pos);
             TextView t = (TextView) v.findViewById(R.id.row_title);
             TextView s = (TextView) v.findViewById(R.id.row_summary);
-            String tag = e.installed.length() > 0 ? e.installed : getString(R.string.installed_tag);
-            t.setText(e.isInstalled ? e.name + "  (" + tag + ")" : e.name);
+            t.setText(e.name);
+            v.findViewById(R.id.row_installed_col).setVisibility(e.isInstalled ? View.VISIBLE : View.GONE);
+            ((TextView) v.findViewById(R.id.row_installed_ver)).setText(e.installed);
+            boolean newer = e.isInstalled && UpdateRule.compare(e.version, e.installed) > 0;
+            v.findViewById(R.id.row_update_col).setVisibility(newer ? View.VISIBLE : View.GONE);
+            ((TextView) v.findViewById(R.id.row_update_ver)).setText(e.version);
             int shade = StoreList.shade(e);
             t.setTextColor(shade == StoreList.FULL ? GREEN : shade == StoreList.PARTIAL ? YELLOW
                     : shade == StoreList.NONE ? RED : PLAIN);

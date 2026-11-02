@@ -32,27 +32,39 @@ public class UpdateService extends IntentService {
                 SystemClock.sleep(WOKE_DELAY_MS);
                 AutoLaunch.run(this);
             }
-            backgroundCheck();
+            if (!backgroundCheck()) packageCheck();
         } catch (Throwable t) {
             CrashLog.note("update.log", "service: " + t);
         }
     }
 
-    /** Failures stay silent and leave the last-check time alone, so the next tick retries. */
-    private void backgroundCheck() {
+    /** Packages get their own 24 h clock. A popup on screen waits for the next tick. */
+    private void packageCheck() {
+        SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (DialogActivity.visible || !UpdateRule.due(System.currentTimeMillis(), p.getLong("pkg_wall", 0),
+                SystemClock.elapsedRealtime(), p.getLong("pkg_elapsed", 0))) return;
+        PkgUpdates.Found f = PkgUpdates.find(this);
+        int n = f.updates.size();
+        if (!f.onlineFailed || n > 0) saveMark(this, "pkg_wall", "pkg_elapsed");
+        if (n > 0) PkgUpdates.popup(this, n);
+    }
+
+    /** Failures stay silent and leave the last-check time alone, so the next tick retries.
+     *  True when this put a popup on screen. */
+    private boolean backgroundCheck() {
         SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (!UpdateRule.due(System.currentTimeMillis(), p.getLong("wall", 0),
-                SystemClock.elapsedRealtime(), p.getLong("elapsed", 0))) return;
+                SystemClock.elapsedRealtime(), p.getLong("elapsed", 0))) return false;
         try {
             Portal.Update u = latest(this);
             if (u == null) {
                 saveChecked(this);
-                return;
+                return false;
             }
             File f = Portal.download(this, u.url, u.sha256, ZIP_NAME);
             if (f == null) {
                 CrashLog.note("update.log", "bad hash for " + u.version);
-                return;
+                return false;
             }
             saveChecked(this);
             Intent i = new Intent(this, DialogActivity.class);
@@ -61,8 +73,10 @@ public class UpdateService extends IntentService {
             i.putExtra("nemesis_path", f.getPath());
             i.putExtra("nemesis_name", u.version);
             startActivity(i);
+            return true;
         } catch (Throwable t) {
             CrashLog.note("update.log", "check failed: " + t);
+            return false;
         }
     }
 
@@ -72,10 +86,14 @@ public class UpdateService extends IntentService {
     }
 
     static void saveChecked(Context c) {
+        saveMark(c, "wall", "elapsed");
+    }
+
+    private static void saveMark(Context c, String wallKey, String elapsedKey) {
         long wall = System.currentTimeMillis();
         SharedPreferences.Editor e = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
-        if (UpdateRule.clockSane(wall)) e.putLong("wall", wall);
-        e.putLong("elapsed", SystemClock.elapsedRealtime());
+        if (UpdateRule.clockSane(wall)) e.putLong(wallKey, wall);
+        e.putLong(elapsedKey, SystemClock.elapsedRealtime());
         e.commit();
     }
 }

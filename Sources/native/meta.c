@@ -1,5 +1,7 @@
 #include "nemesis.h"
 
+#include <ctype.h>
+
 /*
  * Descriptor metadata (NEMESIS.data [nemesis]) parsing, version specs and
  * compatibility. Pure logic: the caller supplies the device OS/model and a
@@ -134,6 +136,17 @@ const char *meta_dep_spec(const char *deps, const char *id, char *spec, size_t c
     return NULL;
 }
 
+/* The spec `deps` gives for `!id`, or NULL. */
+const char *meta_conflict_spec(const char *deps, const char *id, char *spec, size_t cap) {
+    const char *p = deps;
+    char item[160], did[MAX_ID];
+    while (meta_list_next(&p, item, sizeof(item))) {
+        if (item[0] == '!' && dep_split(item + 1, did, sizeof(did), spec, cap) == 0 && !strcmp(did, id))
+            return spec;
+    }
+    return NULL;
+}
+
 int glob_match(const char *pat, const char *s) {
     if (!*pat) return !*s;
     if (*pat == '*') {
@@ -144,7 +157,8 @@ int glob_match(const char *pat, const char *s) {
         }
     }
     if (!*s) return 0;
-    if (*pat == '?' || *pat == *s) return glob_match(pat + 1, s + 1);
+    if (*pat == '?' || tolower((unsigned char)*pat) == tolower((unsigned char)*s))
+        return glob_match(pat + 1, s + 1);
     return 0;
 }
 
@@ -175,9 +189,30 @@ static int set_field(char *dst, size_t cap, const char *v, const char *key, char
     return 0;
 }
 
-int meta_parse(const ini_file *ini, pkg_meta *m, char *err, size_t ecap) {
-    const char *v, *t, *p;
+/* depends= items are id, id@spec, or !id, !id@spec for an incompatible package. */
+static int depends_ok(const char *list, const char *self, char *err, size_t ecap) {
+    const char *p = list;
     char item[160], id[MAX_ID], spec[64];
+    while (meta_list_next(&p, item, sizeof(item))) {
+        int bang = item[0] == '!';
+        if (dep_split(item + bang, id, sizeof(id), spec, sizeof(spec)) != 0 || !spec_valid(spec)) {
+            snprintf(err, ecap, "bad depends entry: %s", item);
+            return -1;
+        }
+        if (!strcmp(id, self)) {
+            snprintf(err, ecap, "package names itself in depends");
+            return -1;
+        }
+        if (bang && meta_depends_on(list, id)) {
+            snprintf(err, ecap, "depends both needs and refuses %s", id);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int meta_parse(const ini_file *ini, pkg_meta *m, char *err, size_t ecap) {
+    const char *v, *t;
     memset(m, 0, sizeof(*m));
     if (err && ecap) err[0] = 0;
     v = ini_get(ini, "nemesis", "version");
@@ -223,17 +258,7 @@ int meta_parse(const ini_file *ini, pkg_meta *m, char *err, size_t ecap) {
     if (set_field(m->detailed_desc, sizeof(m->detailed_desc), v, "detailed-desc", err, ecap)) return -1;
     v = ini_get(ini, "nemesis", "depends");
     if (set_field(m->depends, sizeof(m->depends), v, "depends", err, ecap)) return -1;
-    p = m->depends;
-    while (meta_list_next(&p, item, sizeof(item))) {
-        if (dep_split(item, id, sizeof(id), spec, sizeof(spec)) != 0 || !spec_valid(spec)) {
-            snprintf(err, ecap, "bad depends entry: %s", item);
-            return -1;
-        }
-        if (!strcmp(id, m->id)) {
-            snprintf(err, ecap, "package depends on itself");
-            return -1;
-        }
-    }
+    if (depends_ok(m->depends, m->id, err, ecap)) return -1;
     if (set_field(m->os, sizeof(m->os), ini_get(ini, "nemesis", "os"), "os", err, ecap)) return -1;
     if (set_field(m->models, sizeof(m->models), ini_get(ini, "nemesis", "models"), "models", err, ecap))
         return -1;
@@ -246,31 +271,40 @@ static void reason_add(char *out, size_t cap, const char *fmt, const char *a, co
     snprintf(out + n, cap - n, fmt, a, b ? b : "", c ? c : "");
 }
 
-int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
-                meta_lookup_fn lookup, char *reasons, size_t cap) {
+/* Appends one reason line per unmet dependency; returns how many. */
+int meta_deps_unmet(const pkg_meta *m, meta_lookup_fn lookup, char *reasons, size_t cap) {
     const char *p = m->depends;
     char item[160], id[MAX_ID], spec[64], have[32];
-    int deps_ok = 1, os_ok, model_ok;
-    reasons[0] = 0;
+    int unmet = 0;
     while (meta_list_next(&p, item, sizeof(item))) {
-        if (dep_split(item, id, sizeof(id), spec, sizeof(spec)) != 0) continue;
+        if (item[0] == '!' || dep_split(item, id, sizeof(id), spec, sizeof(spec)) != 0) continue;
         have[0] = 0;
         if (!lookup || !lookup(id, have, sizeof(have))) {
-            deps_ok = 0;
+            unmet++;
             reason_add(reasons, cap, "dep-missing %s%s%s\n", id, NULL, NULL);
         } else if (!dep_spec_match(spec, have)) {
-            deps_ok = 0;
+            unmet++;
             reason_add(reasons, cap, "dep-version %s have %s need %s\n", id,
                        have[0] ? have : "unknown", spec);
         }
     }
+    return unmet;
+}
+
+/* The verdict is about this head unit only. Unmet dependencies stay listed as
+ * reasons, and install refuses them on their own (exit 22). */
+int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
+                meta_lookup_fn lookup, char *reasons, size_t cap) {
+    int os_ok, model_ok;
+    reasons[0] = 0;
+    meta_deps_unmet(m, lookup, reasons, cap);
     os_ok = meta_list_match(m->os, os_id);
     if (!os_ok) reason_add(reasons, cap, "os %s not in %s%s\n", os_id && *os_id ? os_id : "unknown", m->os, NULL);
     model_ok = meta_list_match(m->models, model);
     if (!model_ok)
         reason_add(reasons, cap, "model %s not in %s%s\n", model && *model ? model : "unknown", m->models, NULL);
-    if (deps_ok && os_ok) return COMPAT_FULL;
-    if (deps_ok && model_ok) return COMPAT_PARTIAL;
+    if (os_ok) return COMPAT_FULL;
+    if (model_ok) return COMPAT_PARTIAL;
     return COMPAT_NONE;
 }
 

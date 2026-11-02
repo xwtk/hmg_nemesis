@@ -1,6 +1,7 @@
 package com.nemesis.manager;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
@@ -13,6 +14,10 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DialogActivity extends Activity {
     private String mode;
@@ -24,6 +29,29 @@ public class DialogActivity extends Activity {
     /** Set when this popup runs the job itself rather than answering the USB handler. */
     private String localPath;
     private String targetName;
+    /** Steps of a Store job waiting for the user's yes. */
+    private List<StoreList.Entry> pending;
+    private boolean storeRisk;
+    /** Set while a download can be cancelled. Whoever flips it first decides. */
+    private volatile AtomicBoolean downloadCancel;
+    /** Background checks stay quiet while this popup is on screen. */
+    static volatile boolean visible;
+
+    /** Install or update `e`. The caller adds nemesis_mode. */
+    static Intent storeIntent(Context c, StoreList.Entry e) {
+        Intent i = new Intent(c, DialogActivity.class);
+        i.putExtra("nemesis_name", e.name);
+        i.putExtra("nemesis_id", e.id);
+        i.putExtra("nemesis_depends", e.depends);
+        if (e.localZip.length() > 0) {
+            i.putExtra("nemesis_path", e.localZip);
+        } else {
+            i.putExtra("nemesis_url", e.url);
+            i.putExtra("nemesis_sha256", e.sha256);
+        }
+        if (e.isInstalled) i.putExtra("nemesis_replace", e.id);
+        return i;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +67,14 @@ public class DialogActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
         sizeAsPopup();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        visible = false;
     }
 
     /** Dimmed full window with a centered card. A floating dialog window is
@@ -72,12 +107,18 @@ public class DialogActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        // A popup is already up, and may be mid-job: the Updates page still shows the count.
+        if ("pkg_updates".equals(intent.getStringExtra("nemesis_mode"))) return;
         setIntent(intent);
         bind(intent);
     }
 
     @Override
     public void onBackPressed() {
+        if (downloadCancel != null) {
+            cancelDownload();
+            return;
+        }
         if (progressing) return;
         if (confirm) writeReply("no");
         else writeReply("ok");
@@ -120,11 +161,26 @@ public class DialogActivity extends Activity {
             return;
         }
         if ("store_online".equals(mode)) {
-            showProgress(getString(R.string.downloading));
-            runStoreDownload(intent);
+            onStoreYes();
             return;
         }
-        if ("confirm_online_update".equals(mode)) {
+        if ("install_blocked".equals(mode)) {
+            // The handler has given up on this zip; from here this popup does the work.
+            writeReply("ok");
+            intent.removeExtra("session_dir");
+            usb = false;
+            onStoreYes();
+            return;
+        }
+        if ("pkg_updates".equals(mode)) {
+            int count = intent.getIntExtra("nemesis_count", 0);
+            msg.setText(count == 1 ? getString(R.string.pkg_updates_one)
+                    : getString(R.string.pkg_updates_many).replace("%d", String.valueOf(count)));
+            confirm = true;
+        } else if ("confirm_deps".equals(mode)) {
+            msg.setText(custom);
+            confirm = true;
+        } else if ("confirm_online_update".equals(mode)) {
             msg.setText(R.string.update_ready);
             confirm = true;
         } else if ("confirm_store_install".equals(mode)) {
@@ -132,7 +188,8 @@ public class DialogActivity extends Activity {
             confirm = true;
         } else if ("confirm_store_update".equals(mode) || "confirm_reinstall".equals(mode)) {
             // confirm_reinstall is the USB handler's question: the handler does the work.
-            msg.setText(R.string.confirm_store_update);
+            String q = getString(R.string.confirm_store_update);
+            msg.setText(name != null && name.length() > 0 ? q.replace("%s", name) : q.replace("\"%s\" ", ""));
             confirm = true;
         } else if ("confirm_execute".equals(mode)) {
             msg.setText(R.string.confirm_execute);
@@ -190,8 +247,9 @@ public class DialogActivity extends Activity {
             msg.setText(custom != null ? custom : getString(R.string.result_fail));
         }
         if (confirm) {
-            yes.setText(R.string.yes);
-            no.setText(R.string.no);
+            boolean updates = "pkg_updates".equals(mode);
+            yes.setText(updates ? R.string.view : R.string.yes);
+            no.setText(updates ? R.string.not_now : R.string.no);
             yes.setVisibility(View.VISIBLE);
             yes.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -270,8 +328,19 @@ public class DialogActivity extends Activity {
             runUpdate(localPath, true);
             return;
         }
-        if ("confirm_store_install".equals(mode)
-                || ((localPath != null || getIntent().hasExtra("nemesis_url")) && "confirm_risk".equals(mode))
+        if ("pkg_updates".equals(mode)) {
+            Intent i = new Intent(this, UpdatesActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            Ui.close(this);
+            return;
+        }
+        if ("confirm_deps".equals(mode)) {
+            runJob(pending);
+            return;
+        }
+        // A stick's confirm_risk is the handler's question: it does the install.
+        if ("confirm_store_install".equals(mode) || (!usb && "confirm_risk".equals(mode))
                 || "confirm_store_update".equals(mode)) {
             onStoreYes();
             return;
@@ -385,68 +454,197 @@ public class DialogActivity extends Activity {
         }).start();
     }
 
+    /** Works out what the package needs before anything is downloaded or changed. */
     private void onStoreYes() {
-        if (getIntent().hasExtra("nemesis_url") && localPath == null) {
-            showProgress(getString(R.string.downloading));
-            runStoreDownload(getIntent());
+        storeRisk = "confirm_risk".equals(mode) || getIntent().getBooleanExtra("nemesis_risk", false);
+        final StoreList.Entry main = new StoreList.Entry();
+        main.id = targetId != null ? targetId : "";
+        main.name = targetName != null ? targetName : "";
+        main.url = getIntent().getStringExtra("nemesis_url");
+        main.sha256 = getIntent().getStringExtra("nemesis_sha256");
+        main.localZip = localPath != null ? localPath : "";
+        main.isInstalled = getIntent().hasExtra("nemesis_replace");
+        main.depends = getIntent().getStringExtra("nemesis_depends");
+        showProgress(getString(R.string.working));
+        new Thread(new Runnable() {
+            public void run() {
+                planStore(main);
+            }
+        }).start();
+    }
+
+    private void planStore(StoreList.Entry main) {
+        if (main.localZip.length() > 0) {
+            Cli.Result info = Cli.exec("pkg-info", main.localZip);
+            Map<String, String> m = Cli.fields(info.out);
+            if (m.get("id") != null) main.id = m.get("id");
+            if (main.name.length() == 0 && m.get("name") != null) main.name = m.get("name");
+            main.depends = m.get("depends");
+            main.isInstalled = "1".equals(m.get("installed"));
+            String clash = blockedMessage(info.out, main.name);
+            if (clash != null) {
+                goOnUi("result_fail", clash, null, null);
+                return;
+            }
+        }
+        DepPlan plan = DepPlan.of(main.id, main.depends, PkgUpdates.source(this));
+        if (!plan.conflicts.isEmpty()) {
+            List<String> names = new ArrayList<String>();
+            for (int k = 0; k < plan.conflicts.size(); k++) {
+                String n = Cli.fields(Cli.run("pkg-info", plan.conflicts.get(k))).get("name");
+                names.add(n != null ? n : plan.conflicts.get(k));
+            }
+            goOnUi("result_fail", named(R.string.install_conflict, main.name, bullets(names)), null, null);
             return;
         }
-        showProgress(getString(R.string.installing));
-        runStoreInstall(localPath);
+        if (!plan.missing.isEmpty()) {
+            goOnUi("result_fail", named(R.string.deps_unmet, main.name, bullets(plan.missing)), null, null);
+            return;
+        }
+        final List<StoreList.Entry> queue = new ArrayList<StoreList.Entry>(plan.steps);
+        queue.add(main);
+        if (plan.steps.isEmpty()) {
+            runJob(queue);
+            return;
+        }
+        List<String> lines = new ArrayList<String>();
+        for (int k = 0; k < plan.steps.size(); k++) {
+            StoreList.Entry e = plan.steps.get(k);
+            String line = (e.name + " " + e.version).trim();
+            if (e.isInstalled) line += getString(R.string.deps_update_from).replace("%s", e.installed);
+            lines.add(line);
+        }
+        final String ask = named(R.string.confirm_deps, main.name, bullets(lines));
+        runOnUiThread(new Runnable() {
+            public void run() {
+                pending = queue;
+                go("confirm_deps", ask);
+            }
+        });
     }
 
-    /** Online Store row: verified zip in the private cache, then the same install. */
-    private void runStoreDownload(final Intent intent) {
-        final String url = intent.getStringExtra("nemesis_url");
-        final String sha = intent.getStringExtra("nemesis_sha256");
+    private String named(int res, String name, String list) {
+        return getString(res).replace("%n", name).replace("%s", list);
+    }
+
+    private static String bullets(List<String> items) {
+        StringBuilder sb = new StringBuilder();
+        for (int k = 0; k < items.size(); k++) sb.append("\n• ").append(items.get(k));
+        return sb.toString();
+    }
+
+    /** The user-facing reason in install or pkg-info output, or null if it has none. */
+    private String blockedMessage(String out, String name) {
+        String conflicts = namesAfter(out, "conflict ");
+        if (conflicts != null) return named(R.string.install_conflict, name, conflicts);
+        String dependents = namesAfter(out, "dependent ");
+        return dependents == null ? null : named(R.string.update_blocked, name, dependents);
+    }
+
+    /** Dependencies first, the package last. Runs each step in order and stops at a failure. */
+    private void runJob(final List<StoreList.Entry> queue) {
+        showProgress(getString(R.string.working));
         new Thread(new Runnable() {
             public void run() {
-                try {
-                    java.io.File f = Portal.download(DialogActivity.this, url, sha, "store-package.zip");
-                    if (f == null) {
-                        goOnUi("result_fail", getString(R.string.download_bad), null, null);
-                        return;
-                    }
-                    final String path = f.getPath();
-                    runOnUiThread(new Runnable() {
-                        public void run() {
-                            showProgress(getString(R.string.installing));
-                            runStoreInstall(path);
-                        }
-                    });
-                } catch (Throwable t) {
-                    CrashLog.note("update.log", "store download failed: " + t);
-                    goOnUi("result_fail", getString(R.string.download_fail), null, null);
+                sweepCache();
+                for (int k = 0; k < queue.size(); k++) {
+                    if (!runStep(queue.get(k), k == queue.size() - 1)) return;
                 }
+                goOnUi("result_ok", null, null, null);
             }
         }).start();
     }
 
-    /** Update removes the old version first, so the dependency guard applies. */
-    private void runStoreInstall(final String path) {
-        final String replacing = getIntent().getStringExtra("nemesis_replace");
-        final boolean risk = "confirm_risk".equals(mode)
-                || getIntent().getBooleanExtra("nemesis_risk", false);
-        new Thread(new Runnable() {
-            public void run() {
-                if (replacing != null) {
-                    Cli.Result u = Cli.exec("uninstall", replacing);
-                    if (u.rc != 0) {
-                        String deps = u.rc == 4 ? dependentNames(u.out) : null;
-                        finishStore(path, "result_fail", deps == null ? null
-                                : getString(R.string.uninstall_blocked).replace("%s", deps));
-                        return;
-                    }
-                }
-                Cli.Result r = risk ? Cli.exec("install", "--accept-risk", path) : Cli.exec("install", path);
-                finishStore(path, r.rc == 0 ? "result_ok" : "result_fail", null);
-            }
-        }).start();
+    /** A power cut mid-download leaves a zip nothing else would remove. */
+    private void sweepCache() {
+        File[] files = getCacheDir().listFiles();
+        for (int k = 0; files != null && k < files.length; k++) {
+            if (files[k].getName().startsWith("store-package")) files[k].delete();
+        }
     }
 
-    private void finishStore(String path, String resultMode, String message) {
-        if (path != null && path.startsWith(getCacheDir().getPath())) new java.io.File(path).delete();
-        goOnUi(resultMode, message, null, null);
+    private boolean runStep(StoreList.Entry e, boolean last) {
+        String path = e.localZip;
+        File cached = null;
+        if (path.length() == 0) {
+            AtomicBoolean cancel = new AtomicBoolean();
+            downloadCancel = cancel;
+            progressOnUi(getString(R.string.downloading_named).replace("%s", e.name), true);
+            try {
+                cached = Portal.download(this, e.url, e.sha256, "store-package-" + System.nanoTime() + ".zip", cancel);
+            } catch (Portal.Cancelled c) {
+                return false;
+            } catch (Throwable t) {
+                CrashLog.note("update.log", "store download failed: " + t);
+                downloadCancel = null;
+                goOnUi("result_fail", getString(R.string.download_fail), null, null);
+                return false;
+            }
+            if (!cancel.compareAndSet(false, true)) {
+                if (cached != null) cached.delete();
+                return false;
+            }
+            downloadCancel = null;
+            if (cached == null) {
+                goOnUi("result_fail", getString(R.string.download_bad), null, null);
+                return false;
+            }
+            path = cached.getPath();
+        }
+        progressOnUi(getString(R.string.installing_named).replace("%s", e.name), false);
+        List<String> args = new ArrayList<String>();
+        args.add("install");
+        if (e.isInstalled) args.add("--update");
+        if (last && storeRisk) args.add("--accept-risk");
+        args.add(path);
+        Cli.Result r = Cli.exec(args.toArray(new String[args.size()]));
+        if (cached != null) cached.delete();
+        if (r.rc == 0) return true;
+        CrashLog.note("update.log", "store install " + e.id + " rc=" + r.rc);
+        if (r.rc == 20 && last) {
+            // Its own descriptor says no: asked here, as the Store's listing could not know.
+            goOnUi("confirm_risk", null, null, null);
+            return false;
+        }
+        String why = r.rc == 22 ? named(R.string.deps_unmet, e.name, bullets(DepPlan.unmet(r.out)))
+                : blockedMessage(r.out, e.name);
+        if (why == null) why = getString(R.string.result_fail);
+        goOnUi("result_fail", last ? why : e.name + ": " + why, null, null);
+        return false;
+    }
+
+    private void progressOnUi(final String text, final boolean download) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                if (isFinishing()) return;
+                if (download) showDownload(text);
+                else showProgress(text);
+            }
+        });
+    }
+
+    private void showDownload(String text) {
+        showProgress(text);
+        View bar = findViewById(R.id.btn_bar);
+        Button yes = (Button) findViewById(R.id.button1);
+        Button no = (Button) findViewById(R.id.button2);
+        if (bar == null || yes == null || no == null) return;
+        bar.setVisibility(View.VISIBLE);
+        yes.setVisibility(View.GONE);
+        no.setText(R.string.cancel);
+        no.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                cancelDownload();
+            }
+        });
+    }
+
+    /** Ignored once the download has finished and its install is about to start. */
+    private void cancelDownload() {
+        AtomicBoolean c = downloadCancel;
+        if (c == null || !c.compareAndSet(false, true)) return;
+        downloadCancel = null;
+        Ui.close(this);
     }
 
     private void runUninstall() {
@@ -459,7 +657,7 @@ public class DialogActivity extends Activity {
                         if (isFinishing()) return;
                         Intent i = new Intent(getIntent());
                         i.putExtra("nemesis_mode", r.rc == 0 ? "result_ok" : "result_fail");
-                        String deps = r.rc == 4 ? dependentNames(r.out) : null;
+                        String deps = r.rc == 4 ? namesAfter(r.out, "dependent ") : null;
                         if (deps != null)
                             i.putExtra("nemesis_message",
                                     getString(R.string.uninstall_blocked).replace("%s", deps));
@@ -528,15 +726,15 @@ public class DialogActivity extends Activity {
         }).start();
     }
 
-    /** Names from the "dependent <id>|<name>" lines of a blocked uninstall, one per line. */
-    static String dependentNames(String out) {
+    /** Names from the "<prefix><id>|<name>" lines of native output, one per line. */
+    static String namesAfter(String out, String prefix) {
         if (out == null) return null;
         StringBuilder sb = new StringBuilder();
         String[] lines = out.split("\n");
         for (int k = 0; k < lines.length; k++) {
             String ln = lines[k].trim();
-            if (!ln.startsWith("dependent ")) continue;
-            String rest = ln.substring("dependent ".length());
+            if (!ln.startsWith(prefix)) continue;
+            String rest = ln.substring(prefix.length());
             int bar = rest.indexOf('|');
             String name = bar < 0 ? rest : rest.substring(bar + 1);
             if (name.length() == 0) name = rest.substring(0, bar);

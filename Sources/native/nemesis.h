@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.16.2"
+#define NEMESIS_VERSION "1.16.3"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -151,6 +151,8 @@ int meta_list_next(const char **p, char *out, size_t cap);
 int meta_list_match(const char *list, const char *value);
 int meta_depends_on(const char *deps, const char *id);
 const char *meta_dep_spec(const char *deps, const char *id, char *spec, size_t cap);
+const char *meta_conflict_spec(const char *deps, const char *id, char *spec, size_t cap);
+int meta_deps_unmet(const pkg_meta *m, meta_lookup_fn lookup, char *reasons, size_t cap);
 int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
                 meta_lookup_fn lookup, char *reasons, size_t cap);
 const char *compat_name(int c);

@@ -26,6 +26,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -83,6 +84,7 @@ final class Portal {
             e.name = p.optString("name", e.id);
             e.shortDesc = p.optString("short-desc", "");
             e.published = p.optString("published", "");
+            e.version = p.optString("package-version", "");
             out.add(e);
         }
         return out;
@@ -118,10 +120,17 @@ final class Portal {
         } catch (Throwable ignored) {
         }
         String iface = UpdateRule.defaultRouteIface(readRoutes());
-        if (UpdateRule.networkAllowed(false, type, iface)) return;
-        CrashLog.note("network.log", "blocked type=" + type + " iface=" + iface);
-        throw new IOException("blocked by network policy");
+        boolean ok = UpdateRule.networkAllowed(false, type, iface);
+        // Only changes, or a daily check on a blocked unit would fill the log.
+        String seen = (ok ? "allowed" : "blocked") + " type=" + type + " iface=" + iface;
+        if (!seen.equals(lastNetwork)) {
+            lastNetwork = seen;
+            CrashLog.note("network.log", seen);
+        }
+        if (!ok) throw new IOException("blocked by network policy");
     }
+
+    private static volatile String lastNetwork;
 
     private static String readRoutes() {
         try {
@@ -172,6 +181,15 @@ final class Portal {
     /** Download into the Manager's private cache, so no other app can swap the
      *  file between the hash check and the install. Null when the hash is wrong. */
     static File download(Context c, String url, String sha256, String name) throws Exception {
+        return download(c, url, sha256, name, null);
+    }
+
+    /** Thrown out of download when `cancel` was set. */
+    static final class Cancelled extends IOException {
+    }
+
+    /** cancel, when given, is read at every buffer; the partial file is removed. */
+    static File download(Context c, String url, String sha256, String name, AtomicBoolean cancel) throws Exception {
         File dir = c.getCacheDir();
         File out = new File(dir, name);
         File tmp = new File(dir, name + ".part");
@@ -185,6 +203,7 @@ final class Portal {
                 byte[] buf = new byte[65536];
                 int n;
                 while ((n = in.read(buf)) > 0) {
+                    if (cancel != null && cancel.get()) throw new Cancelled();
                     md.update(buf, 0, n);
                     os.write(buf, 0, n);
                 }
