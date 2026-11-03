@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
             R.drawable.ic_home_services, R.drawable.ic_home_logs, R.drawable.ic_home_engineering,
             R.drawable.ic_home_dealer, R.drawable.ic_home_wifi,
     };
+    private static final int TILE_CHARS = 26;
     private static final int COLS = 4;
     private static final int ROWS = 2;
     private static final String ENG_COMPONENT =
@@ -162,7 +163,7 @@ public class MainActivity extends Activity {
                         if (lv == null) return;
                         packages.clear();
                         packages.addAll(next);
-                        lv.setAdapter(new TwoLineAdapter(MainActivity.this, packages));
+                        lv.setAdapter(new TwoLineAdapter(MainActivity.this, packages, true));
                     }
                 });
             }
@@ -273,16 +274,18 @@ public class MainActivity extends Activity {
         tile.addView(icon, ip);
         TextView label = new TextView(this);
         if (idx < builtin) label.setText(LABELS[idx]);
-        else label.setText(apps.get(idx - builtin).title);
+        else label.setText(clipTitle(apps.get(idx - builtin).title));
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setTextSize(25);
         label.setTextColor(0xFFFFFFFF);
         label.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         // Setup uses -10dp line spacing; at 25sp a wrapped "Engineering Menu" then overlaps.
         label.setMaxLines(2);
+        // Font padding made two lines taller than the tile's 64dp below the icon, which cut the descenders.
+        label.setIncludeFontPadding(false);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 66), Gravity.TOP);
-        lp.topMargin = Ui.dp(this, 102);
+                FrameLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 64), Gravity.TOP);
+        lp.topMargin = Ui.dp(this, 100);
         tile.addView(label, lp);
         tile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -291,6 +294,11 @@ public class MainActivity extends Activity {
         });
         slot.addView(tile, new LinearLayout.LayoutParams(Ui.dp(this, 204), Ui.dp(this, 166)));
         return slot;
+    }
+
+    /** A tile fits two lines of about 14 characters; "Engineering Menu" is 16. */
+    private static String clipTitle(String t) {
+        return t.length() > TILE_CHARS ? t.substring(0, TILE_CHARS - 1) + "\u2026" : t;
     }
 
     private void onIcon(int idx) {

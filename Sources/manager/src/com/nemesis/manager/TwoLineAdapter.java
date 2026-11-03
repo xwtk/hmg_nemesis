@@ -26,11 +26,18 @@ final class TwoLineAdapter extends BaseAdapter {
 
     private final LayoutInflater inf;
     private final ArrayList<Row> rows;
+    private final boolean oneLine;
     private int selected = -1;
 
     TwoLineAdapter(Context ctx, ArrayList<Row> rows) {
+        this(ctx, rows, false);
+    }
+
+    /** oneLine: title and summary each stay on one line and end in "…" when they do not fit. */
+    TwoLineAdapter(Context ctx, ArrayList<Row> rows, boolean oneLine) {
         this.inf = LayoutInflater.from(ctx);
         this.rows = rows;
+        this.oneLine = oneLine;
     }
 
     void setSelected(int pos) {
@@ -71,6 +78,7 @@ final class TwoLineAdapter extends BaseAdapter {
         TextView title = (TextView) v.findViewById(R.id.row_title);
         if (title != null) {
             title.setText(r.title);
+            if (oneLine) clip(title);
             title.setTextColor(on ? 0xFFFFFFFF : 0xFF62797F);
         } else if (v instanceof TextView) {
             ((TextView) v).setText(r.title);
@@ -82,9 +90,15 @@ final class TwoLineAdapter extends BaseAdapter {
             } else {
                 s.setVisibility(View.VISIBLE);
                 s.setText(r.summary);
+                if (oneLine) clip(s);
                 s.setTextColor(on ? 0xFFFFFFFF : 0xFF888888);
             }
         }
         return v;
+    }
+
+    private static void clip(TextView t) {
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
     }
 }

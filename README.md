@@ -69,7 +69,7 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.5.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.6.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
@@ -78,6 +78,10 @@ OR
 **Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
 
 ## **Changelog**
+
+### 1.16.6
+
+- **Dashboard.** Long package titles, descriptions and app names are cut short with an ellipsis instead of wrapping. The bottom of the Engineering Menu and Dealership Menu labels is no longer clipped.
 
 ### 1.16.5
 

@@ -20,6 +20,8 @@
                 android:layout_weight="1">
                 <TextView
                     android:text="@string/my_packages"
+                    android:singleLine="true"
+                    android:ellipsize="end"
                     android:textSize="24sp"
                     android:textColor="#ffb6c1c8"
                     android:gravity="center_vertical"
