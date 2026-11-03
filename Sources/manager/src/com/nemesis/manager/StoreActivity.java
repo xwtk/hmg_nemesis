@@ -255,12 +255,15 @@ public class StoreActivity extends Activity {
         e.isInstalled = "1".equals(m.get("installed"));
         e.installed = or(m.get("installed-version"), "");
         e.locked = "1".equals(m.get("locked"));
+        // The installed copy's own text, for when the portal cannot be reached.
+        if (e.isInstalled) e.detailedDesc = PackageActivity.unescape(or(m.get("detailed-desc"), ""));
         JSONObject d = Portal.descriptor(ctx, e.id);
         e.version = d.optString("package-version", "");
         e.url = d.optString("url", "");
         e.sha256 = d.optString("sha256", "");
         e.legacy = StoreList.isLegacy(d.optString("descriptor", ""));
-        e.detailedDesc = d.optString("detailed-desc", "");
+        String more = d.optString("detailed-desc", "");
+        if (more.length() > 0) e.detailedDesc = more;
         e.depends = d.optString("depends", "");
         if (e.name.length() == 0) e.name = d.optString("name", e.id);
         String verdict = Cli.run("compat-check", d.optString("os", "any"), d.optString("models", "any"), e.depends);

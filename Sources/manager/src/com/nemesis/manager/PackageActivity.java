@@ -103,7 +103,8 @@ public class PackageActivity extends Activity {
         if (t != null) t.setText(name);
         TextView body = (TextView) findViewById(R.id.log_text);
         if (body != null) {
-            body.setText(id + (ver.length() > 0 ? "  " + ver : "")
+            body.setText(getString(R.string.package_id).replace("%s", id)
+                    + (ver.length() > 0 ? "\n" + getString(R.string.version_line).replace("%s", ver) : "")
                     + (desc.length() > 0 ? "\n\n" + desc : ""));
         }
     }

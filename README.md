@@ -82,6 +82,7 @@ OR
 ### 1.16.6
 
 - **Dashboard.** Long package titles, descriptions and app names are cut short with an ellipsis instead of wrapping. The bottom of the Engineering Menu and Dealership Menu labels is no longer clipped.
+- **Package details.** The installed packages page now labels **Package ID** and **Version**. An installed package opened in the Package Store shows its own detailed description when the portal cannot be reached.
 
 ### 1.16.5
 
