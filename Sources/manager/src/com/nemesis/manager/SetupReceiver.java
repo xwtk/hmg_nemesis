@@ -22,7 +22,11 @@ public class SetupReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
-        if (!Trigger.matches(context, action)) return;
+        if (!Trigger.matches(context, action)) {
+            // A press of the other button is the usual "does not open" cause.
+            CrashLog.note("press.log", action + " ignored, trigger is " + Trigger.label(context));
+            return;
+        }
         long now = SystemClock.uptimeMillis();
         boolean open, counted;
         synchronized (SetupReceiver.class) {

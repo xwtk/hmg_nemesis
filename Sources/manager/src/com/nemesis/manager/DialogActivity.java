@@ -513,7 +513,12 @@ public class DialogActivity extends Activity {
         final List<StoreList.Entry> queue = new ArrayList<StoreList.Entry>(plan.steps);
         queue.add(main);
         if (plan.steps.isEmpty()) {
-            runJob(queue);
+            // runJob shows the progress text, which only the UI thread may do.
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    runJob(queue);
+                }
+            });
             return;
         }
         List<String> lines = new ArrayList<String>();

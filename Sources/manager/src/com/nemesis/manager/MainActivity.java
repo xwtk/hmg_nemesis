@@ -281,11 +281,13 @@ public class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         // Setup uses -10dp line spacing; at 25sp a wrapped "Engineering Menu" then overlaps.
         label.setMaxLines(2);
-        // Font padding made two lines taller than the tile's 64dp below the icon, which cut the descenders.
+        // Font padding made two lines taller than the label box, which cut the descenders.
         label.setIncludeFontPadding(false);
+        // The unit font's lines are taller than stock; tighten them so line two clears the tile edge.
+        label.setLineSpacing(-Ui.dp(this, 3), 1);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 64), Gravity.TOP);
-        lp.topMargin = Ui.dp(this, 100);
+                FrameLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 68), Gravity.TOP);
+        lp.topMargin = Ui.dp(this, 98);
         tile.addView(label, lp);
         tile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {

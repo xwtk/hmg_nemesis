@@ -63,7 +63,15 @@ final class CrashLog {
             File parent = f.getParentFile();
             if (parent != null) parent.mkdirs();
             if (f.length() > 256 * 1024) f.delete();
-            FileOutputStream fos = new FileOutputStream(f, true);
+            FileOutputStream fos;
+            try {
+                fos = new FileOutputStream(f, true);
+            } catch (java.io.FileNotFoundException denied) {
+                // A reinstall gets a new uid; the old one's file is read-only to us.
+                // The directory is world-writable, so replace the file.
+                f.delete();
+                fos = new FileOutputStream(f, true);
+            }
             fos.write(data);
             fos.close();
             f.setReadable(true, false);
