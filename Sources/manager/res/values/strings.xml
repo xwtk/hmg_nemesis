@@ -42,6 +42,12 @@
     <string name="empty_store">No packages to show.</string>
     <string name="install">Install</string>
     <string name="installed_tag">installed</string>
+    <string name="wifi">WiFi</string>
+    <string name="package_id">Package ID: %s</string>
+    <string name="version_line">Version: %s</string>
+    <string name="loading_details">Loading details…</string>
+    <string name="details_failed">Could not load the details. Check the connection and press Retry.</string>
+    <string name="retry">Retry</string>
     <string name="installed_version">Installed: %s</string>
     <string name="published_on">Published: %s</string>
     <string name="legacy_short">May not be compatible</string>

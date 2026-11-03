@@ -32,6 +32,7 @@ public class UpdateService extends IntentService {
                 SystemClock.sleep(WOKE_DELAY_MS);
                 AutoLaunch.run(this);
             }
+            sweep(this);
             if (!backgroundCheck()) packageCheck();
         } catch (Throwable t) {
             CrashLog.note("update.log", "service: " + t);
@@ -56,28 +57,78 @@ public class UpdateService extends IntentService {
         if (!UpdateRule.due(System.currentTimeMillis(), p.getLong("wall", 0),
                 SystemClock.elapsedRealtime(), p.getLong("elapsed", 0))) return false;
         try {
-            Portal.Update u = latest(this);
-            if (u == null) {
-                saveChecked(this);
-                return false;
-            }
-            File f = Portal.download(this, u.url, u.sha256, ZIP_NAME);
-            if (f == null) {
-                CrashLog.note("update.log", "bad hash for " + u.version);
-                return false;
-            }
-            saveChecked(this);
+            File f = fetch(this, null);
+            if (f == null) return false;
             Intent i = new Intent(this, DialogActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             i.putExtra("nemesis_mode", "confirm_online_update");
             i.putExtra("nemesis_path", f.getPath());
-            i.putExtra("nemesis_name", u.version);
+            i.putExtra("nemesis_name", zipVersion(f));
             startActivity(i);
             return true;
         } catch (Throwable t) {
             CrashLog.note("update.log", "check failed: " + t);
             return false;
         }
+    }
+
+    /** The downloaded update, or null when none is newer than this install. A zip that is
+     *  no newer (updated since, by stick or online) or unreadable is deleted. */
+    private static File held(Context c) {
+        File f = new File(c.getCacheDir(), ZIP_NAME);
+        if (!f.isFile()) return null;
+        String v = zipVersion(f);
+        if (v != null && UpdateRule.compare(v, Ui.versionName(c)) > 0) return f;
+        f.delete();
+        return null;
+    }
+
+    static String zipVersion(File f) {
+        Map<String, String> m = Cli.fields(Cli.run("pkg-info", f.getPath()));
+        return "nemesis.core".equals(m.get("id")) ? m.get("package-version") : null;
+    }
+
+    /** Partial downloads and leftovers; a Store popup on screen may own one, so it waits. */
+    static void sweep(Context c) {
+        if (DialogActivity.visible) return;
+        File[] files = c.getCacheDir().listFiles();
+        for (int k = 0; files != null && k < files.length; k++) {
+            String n = files[k].getName();
+            if (n.startsWith("store-package") || n.equals(ZIP_NAME + ".part")) files[k].delete();
+        }
+        held(c);
+    }
+
+    /** The update to offer: the one on disk when the portal has nothing newer or cannot be
+     *  reached, else a fresh download (replacing an older one). Null when up to date.
+     *  `onDownload` runs just before a download starts. */
+    static File fetch(Context c, Runnable onDownload) throws Exception {
+        File have = held(c);
+        Portal.Update u;
+        try {
+            u = latest(c);
+        } catch (Exception e) {
+            if (have != null) return have;
+            throw e;
+        }
+        // The portal answered: this check counts, even when it only offers what is on disk.
+        if (u == null) {
+            if (have != null) have.delete();
+            saveChecked(c);
+            return null;
+        }
+        if (have != null) {
+            if (u.version.equals(zipVersion(have))) {
+                saveChecked(c);
+                return have;
+            }
+            have.delete();
+        }
+        if (onDownload != null) onDownload.run();
+        File f = Portal.download(c, u.url, u.sha256, ZIP_NAME);
+        if (f == null) throw new java.io.IOException("bad hash for " + u.version);
+        saveChecked(c);
+        return f;
     }
 
     static Portal.Update latest(Context c) throws Exception {

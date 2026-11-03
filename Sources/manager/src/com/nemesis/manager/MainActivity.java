@@ -23,14 +23,15 @@ public class MainActivity extends Activity {
     private static final int ACT_LOG = 3;
     private static final int ACT_ENG = 4;
     private static final int ACT_DEALER = 5;
+    private static final int ACT_WIFI = 6;
     private static final int[] LABELS = {
             R.string.store, R.string.settings, R.string.services,
-            R.string.logs, R.string.engineering, R.string.dealer,
+            R.string.logs, R.string.engineering, R.string.dealer, R.string.wifi,
     };
     private static final int[] ICONS = {
             R.drawable.ic_home_store, R.drawable.ic_home_settings,
             R.drawable.ic_home_services, R.drawable.ic_home_logs, R.drawable.ic_home_engineering,
-            R.drawable.ic_home_dealer,
+            R.drawable.ic_home_dealer, R.drawable.ic_home_wifi,
     };
     private static final int COLS = 4;
     private static final int ROWS = 2;
@@ -39,6 +40,10 @@ public class MainActivity extends Activity {
     private static final String DEALER_COMPONENT =
             "com.hkmc.system.app.engineering/.DealerModeActivity";
 
+    private static final String WIFI_SETTINGS = "-a android.net.wifi.PICK_WIFI_NETWORK";
+
+    /** Built-in tiles shown: all of LABELS, minus WiFi on a unit without the module. */
+    private int builtin = LABELS.length - 1;
     private final Handler handler = new Handler();
     private final ArrayList<TwoLineAdapter.Row> packages = new ArrayList<TwoLineAdapter.Row>();
     /** User-installed apps shown after the built-in tiles. */
@@ -94,6 +99,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Ui.ensureWatchdog();
+        if (hasWifi()) builtin = LABELS.length;
         try {
             if (!Ui.setLayout(this, R.layout.activity_main) || findViewById(R.id.pager) == null) {
                 showFallback();
@@ -120,7 +126,7 @@ public class MainActivity extends Activity {
         ListView lv = (ListView) findViewById(R.id.list);
         if (lv == null) return;
         ArrayList<TwoLineAdapter.Row> rows = new ArrayList<TwoLineAdapter.Row>();
-        for (int i = 0; i < LABELS.length; i++) {
+        for (int i = 0; i < builtin; i++) {
             rows.add(new TwoLineAdapter.Row(getString(LABELS[i]), "", "", false));
         }
         lv.setAdapter(new TwoLineAdapter(this, rows));
@@ -191,7 +197,7 @@ public class MainActivity extends Activity {
         pager.clear();
         dots.removeAllViews();
         dots.setVisibility(View.VISIBLE);
-        int total = LABELS.length + apps.size();
+        int total = builtin + apps.size();
         int perPage = COLS * ROWS;
         int pages = (total + perPage - 1) / perPage;
         for (int pg = 0; pg < pages; pg++) {
@@ -251,12 +257,12 @@ public class MainActivity extends Activity {
         tile.setBackgroundResource(R.drawable.home_tile);
         tile.setClickable(true);
         ImageView icon = new ImageView(this);
-        if (idx < LABELS.length) {
+        if (idx < builtin) {
             icon.setImageResource(ICONS[idx]);
         } else {
             try {
                 icon.setImageDrawable(getPackageManager()
-                        .getApplicationIcon(apps.get(idx - LABELS.length).key));
+                        .getApplicationIcon(apps.get(idx - builtin).key));
             } catch (Throwable t) {
                 icon.setImageDrawable(getPackageManager().getDefaultActivityIcon());
             }
@@ -266,8 +272,8 @@ public class MainActivity extends Activity {
         ip.topMargin = Ui.dp(this, 34);
         tile.addView(icon, ip);
         TextView label = new TextView(this);
-        if (idx < LABELS.length) label.setText(LABELS[idx]);
-        else label.setText(apps.get(idx - LABELS.length).title);
+        if (idx < builtin) label.setText(LABELS[idx]);
+        else label.setText(apps.get(idx - builtin).title);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setTextSize(25);
         label.setTextColor(0xFFFFFFFF);
@@ -288,13 +294,20 @@ public class MainActivity extends Activity {
     }
 
     private void onIcon(int idx) {
-        if (idx >= LABELS.length) openApp(apps.get(idx - LABELS.length).key);
+        if (idx >= builtin) openApp(apps.get(idx - builtin).key);
         else if (idx == ACT_STORE) startActivity(new Intent(this, StoreActivity.class));
         else if (idx == ACT_SETTINGS) startActivity(new Intent(this, SettingsActivity.class));
         else if (idx == ACT_SVC) startActivity(new Intent(this, ServiceActivity.class));
         else if (idx == ACT_LOG) startActivity(new Intent(this, LogActivity.class));
-        else if (idx == ACT_ENG) openComponent(ENG_COMPONENT);
-        else if (idx == ACT_DEALER) openComponent(DEALER_COMPONENT);
+        else if (idx == ACT_ENG) openComponent("-n " + ENG_COMPONENT);
+        else if (idx == ACT_DEALER) openComponent("-n " + DEALER_COMPONENT);
+        else if (idx == ACT_WIFI) openComponent(WIFI_SETTINGS);
+    }
+
+    /** The module's feature file (not on units without one) or its network interface. */
+    private boolean hasWifi() {
+        return getPackageManager().hasSystemFeature("android.hardware.wifi")
+                || new java.io.File("/sys/class/net/wlan0").exists();
     }
 
     private void openApp(String pkg) {
@@ -313,7 +326,7 @@ public class MainActivity extends Activity {
     private void openComponent(final String component) {
         new Thread(new Runnable() {
             public void run() {
-                final int rc = Cli.runRc("root", "-c", "am start -n " + component);
+                final int rc = Cli.runRc("root", "-c", "am start " + component);
                 if (rc == 0) return;
                 runOnUiThread(new Runnable() {
                     public void run() {

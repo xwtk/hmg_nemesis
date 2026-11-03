@@ -69,7 +69,7 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.4.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.5.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
@@ -78,6 +78,12 @@ OR
 **Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
 
 ## **Changelog**
+
+### 1.16.5
+
+- **Wi-Fi.** Manager has a **WiFi** button after Dealership Menu that opens the Wi-Fi network list. It appears only on units with a Wi-Fi module.
+- **Package Store.** The details page shows "Loading details…" while it fetches, then the full description and **Package ID**. If the fetch fails, it says so and offers **Retry**, and an installed package can still be uninstalled. An install that hit an internal error now shows a failure popup instead of waiting forever.
+- **NEMESIS updates.** A downloaded update is kept if you decline it and offered again on every check, even offline. A newer version replaces it, and an update installed any other way (for example from USB) deletes it. Partial downloads and leftovers are removed at startup.
 
 ### 1.16.4
 

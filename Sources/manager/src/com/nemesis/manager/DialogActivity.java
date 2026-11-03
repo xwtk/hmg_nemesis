@@ -415,21 +415,16 @@ public class DialogActivity extends Activity {
                     return;
                 }
                 try {
-                    Portal.Update u = UpdateService.latest(DialogActivity.this);
-                    if (u == null) {
-                        UpdateService.saveChecked(DialogActivity.this);
+                    java.io.File f = UpdateService.fetch(DialogActivity.this, new Runnable() {
+                        public void run() {
+                            goOnUi("progress", getString(R.string.downloading), null, null);
+                        }
+                    });
+                    if (f == null) {
                         goOnUi("up_to_date", null, null, null);
                         return;
                     }
-                    goOnUi("progress", getString(R.string.downloading), null, null);
-                    java.io.File f = Portal.download(DialogActivity.this, u.url, u.sha256,
-                            UpdateService.ZIP_NAME);
-                    if (f == null) {
-                        goOnUi("result_fail", getString(R.string.download_bad), null, null);
-                        return;
-                    }
-                    UpdateService.saveChecked(DialogActivity.this);
-                    goOnUi("confirm_online_update", null, f.getPath(), u.version);
+                    goOnUi("confirm_online_update", null, f.getPath(), UpdateService.zipVersion(f));
                 } catch (Throwable t) {
                     CrashLog.note("update.log", "check failed: " + t);
                     goOnUi("result_fail", getString(R.string.update_offline), null, null);
@@ -476,7 +471,13 @@ public class DialogActivity extends Activity {
         showProgress(getString(R.string.working));
         new Thread(new Runnable() {
             public void run() {
-                planStore(main);
+                try {
+                    planStore(main);
+                } catch (Throwable t) {
+                    // An uncaught error here left the popup on "Please wait" with nothing happening.
+                    CrashLog.note("update.log", "store plan " + main.id + ": " + t);
+                    goOnUi("result_fail", null, null, null);
+                }
             }
         }).start();
     }
@@ -554,11 +555,16 @@ public class DialogActivity extends Activity {
         showProgress(getString(R.string.working));
         new Thread(new Runnable() {
             public void run() {
-                sweepCache();
-                for (int k = 0; k < queue.size(); k++) {
-                    if (!runStep(queue.get(k), k == queue.size() - 1)) return;
+                try {
+                    sweepCache();
+                    for (int k = 0; k < queue.size(); k++) {
+                        if (!runStep(queue.get(k), k == queue.size() - 1)) return;
+                    }
+                    goOnUi("result_ok", null, null, null);
+                } catch (Throwable t) {
+                    CrashLog.note("update.log", "store job: " + t);
+                    goOnUi("result_fail", null, null, null);
                 }
-                goOnUi("result_ok", null, null, null);
             }
         }).start();
     }

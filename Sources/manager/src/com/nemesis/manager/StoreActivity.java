@@ -250,16 +250,17 @@ public class StoreActivity extends Activity {
     }
 
     static void resolveOnline(Context ctx, StoreList.Entry e) throws Exception {
+        // Local state first: an installed package can still be removed when the portal is out of reach.
+        Map<String, String> m = Cli.fields(Cli.run("pkg-info", e.id));
+        e.isInstalled = "1".equals(m.get("installed"));
+        e.installed = or(m.get("installed-version"), "");
+        e.locked = "1".equals(m.get("locked"));
         JSONObject d = Portal.descriptor(ctx, e.id);
         e.version = d.optString("package-version", "");
         e.url = d.optString("url", "");
         e.sha256 = d.optString("sha256", "");
         e.legacy = StoreList.isLegacy(d.optString("descriptor", ""));
         e.detailedDesc = d.optString("detailed-desc", "");
-        Map<String, String> m = Cli.fields(Cli.run("pkg-info", e.id));
-        e.isInstalled = "1".equals(m.get("installed"));
-        e.installed = or(m.get("installed-version"), "");
-        e.locked = "1".equals(m.get("locked"));
         e.depends = d.optString("depends", "");
         if (e.name.length() == 0) e.name = d.optString("name", e.id);
         String verdict = Cli.run("compat-check", d.optString("os", "any"), d.optString("models", "any"), e.depends);

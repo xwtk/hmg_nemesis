@@ -14,6 +14,7 @@ public class StoreDetailActivity extends Activity {
     private String path;
     private StoreList.Entry entry;
     private int gen;
+    private boolean failed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,7 +38,7 @@ public class StoreDetailActivity extends Activity {
                 onUninstall();
             }
         });
-        show(fresh());
+        show(fresh(), true, false);
     }
 
     private StoreList.Entry fresh() {
@@ -55,29 +56,38 @@ public class StoreDetailActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (findViewById(R.id.log_text) == null) return;
+        reload();
+    }
+
+    private void reload() {
         final int g = ++gen;
+        show(entry != null ? entry : fresh(), true, false);
         new Thread(new Runnable() {
             public void run() {
                 final StoreList.Entry e = fresh();
+                boolean bad = false;
                 try {
                     if (root != null) StoreActivity.resolveUsb(e, root);
                     else StoreActivity.resolveOnline(StoreDetailActivity.this, e);
                 } catch (Throwable t) {
+                    bad = true;
                     CrashLog.note("update.log", "descriptor " + e.name + ": " + t);
                 }
+                final boolean fail = bad;
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        if (g == gen && !isFinishing()) show(e);
+                        if (g == gen && !isFinishing()) show(e, false, fail);
                     }
                 });
             }
         }).start();
     }
 
-    private void show(StoreList.Entry e) {
+    private void show(StoreList.Entry e, boolean loading, boolean bad) {
         entry = e;
-        StringBuilder sb = new StringBuilder(e.id);
-        if (e.version.length() > 0) sb.append("  ").append(e.version);
+        failed = bad;
+        StringBuilder sb = new StringBuilder(getString(R.string.package_id).replace("%s", e.id == null ? "" : e.id));
+        if (e.version.length() > 0) sb.append('\n').append(getString(R.string.version_line).replace("%s", e.version));
         if (e.isInstalled && e.installed.length() > 0) {
             sb.append('\n').append(getString(R.string.installed_version).replace("%s", e.installed));
         }
@@ -87,6 +97,8 @@ public class StoreDetailActivity extends Activity {
         }
         String desc = e.detailedDesc.length() > 0 ? e.detailedDesc : e.shortDesc;
         if (desc.length() > 0) sb.append("\n\n").append(desc);
+        if (loading) sb.append("\n\n").append(getString(R.string.loading_details));
+        if (bad) sb.append("\n\n").append(getString(R.string.details_failed));
         ((TextView) findViewById(R.id.log_text)).setText(sb);
         TextView warn = (TextView) findViewById(R.id.warning);
         // Says why a row is yellow or red: it is the text the car itself compared.
@@ -98,13 +110,18 @@ public class StoreDetailActivity extends Activity {
         boolean differs = e.isInstalled && UpdateRule.compare(e.version, e.installed) != 0;
         Button a = (Button) findViewById(R.id.btn_a);
         Button b = (Button) findViewById(R.id.btn_b);
-        a.setText(differs ? R.string.update : R.string.install);
-        a.setVisibility(known && (!e.isInstalled || differs) ? View.VISIBLE : View.GONE);
+        a.setText(bad ? R.string.retry : differs ? R.string.update : R.string.install);
+        a.setVisibility(!loading && (bad || known && (!e.isInstalled || differs)) ? View.VISIBLE : View.GONE);
         b.setText(R.string.uninstall);
-        b.setVisibility(known && e.isInstalled ? View.VISIBLE : View.GONE);
+        // Removing needs nothing from the portal, so a failed fetch does not hide it.
+        b.setVisibility(!loading && e.isInstalled && !e.locked && (known || bad) ? View.VISIBLE : View.GONE);
     }
 
     private void onInstall() {
+        if (failed) {
+            reload();
+            return;
+        }
         StoreList.Entry e = entry;
         Intent i = DialogActivity.storeIntent(this, e);
         // An incompatible package gets the risk popup from either tab, update or not.
