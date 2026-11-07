@@ -1,0 +1,23 @@
+[nemesis]
+version=1.1
+id=enhanced.projection
+name=Enhanced Phone Projection
+type=application
+package-version=1.23
+short-desc="Wireless CarPlay, improved Android Auto, Turn-by-Turn guidance."
+detailed-desc="Enhanced Phone Projection:
+- Wireless CarPlay
+- Turn-by-Turn on cluster and HUD
+- Improved Android Auto
+Fixes: unstable CarPlay Turn-by-Turn, wireless CarPlay freezing, projection staying connected with screens OFF, bad USB CarPlay/AA switching."
+os="CVEV.*.260507"
+models="cvev_*"
+depends=wireless.projection,!wireless.carplay.aa
+preinstall=scripts/pre.sh
+postinstall=scripts/post.sh
+preuninstall=scripts/preun.sh
+
+[app.0]
+kind=sh
+path=bin/status.sh
+uid=root

@@ -1,12 +1,13 @@
 [nemesis]
 version=1.1
 id=wireless.projection
-name=Wireless projection
+name=Enable Wireless Features
 type=application
-package-version=1.0.0
-short-desc="Enables wireless Android Auto and CarPlay."
+package-version=1.1.0
+short-desc="Enables built-in WiFi and OEM wireless Android Auto."
 os=any
 models=any
+depends=!wireless.carplay.aa
 preinstall=scripts/pre.sh
 postinstall=scripts/post.sh
 preuninstall=scripts/preun.sh

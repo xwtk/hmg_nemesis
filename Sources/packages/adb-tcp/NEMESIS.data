@@ -1,10 +1,10 @@
 [nemesis]
 version=1.1
 id=adb.tcp
-name=TCP ADB
+name=Enable ADB accessibility
 type=application
-package-version=1.0.0
-short-desc="Turns on ADB over TCP/IP on port 5555."
+package-version=1.1.0
+short-desc="Enables the ADB menu access in Engineering Mode."
 os=any
 models=any
 preinstall=scripts/pre.sh
