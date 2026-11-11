@@ -1,0 +1,2 @@
+jdk.jar.disabledAlgorithms=MD2
+jdk.certpath.disabledAlgorithms=MD2

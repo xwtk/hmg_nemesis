@@ -1,0 +1,4 @@
+[nemesis]
+version=1.0
+type=install
+path=packages/engine.sound.zip

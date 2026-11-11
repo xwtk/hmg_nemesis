@@ -1,0 +1,19 @@
+[nemesis]
+version=1.1
+id=engine.sound
+name=Engine Sound
+type=application
+package-version=1.0
+short-desc="Combustion engine sound with an 8-speed automatic gearbox"
+detailed-desc="Plays a recorded petrol engine through the cabin speakers, driven by real speed and pedal. RPM follows an 8-speed automatic: start-up flare, shift dips, kickdown, eco cruise and engine braking. Pick the car and volume in the app."
+os=any
+models=any
+postinstall=scripts/post.sh
+preuninstall=scripts/preun.sh
+
+[app.0]
+kind=apk
+path=app/EngineSound.apk
+package=com.nemesis.enginesound
+component=com.nemesis.enginesound/.ui.MainActivity
+uid=root
