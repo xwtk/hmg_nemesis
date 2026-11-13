@@ -99,13 +99,14 @@ Wipe is the supported removal. It remounts `/system` with `nemesis remount rw` (
 ```sh
 /system/xbin/nemesis wipe --confirm
 /system/xbin/nemesis wipe --confirm --no-reboot
+/system/xbin/nemesis wipe --confirm --force
 ```
 
-Without `--confirm` the CLI prints usage and does nothing. Wipe reboots the unit when it succeeds, unless `--no-reboot` is passed.
+Without `--confirm` the CLI prints usage and does nothing. Wipe reboots the unit when it succeeds, unless `--no-reboot` is passed. `--force` is the recovery path when a package keeps blocking the wipe; see 5.4.
 
 ### 5.3 What wipe removes
 
-1. Every installed package tree, including locked core packages such as `usb-handler`, with uninstall hooks, in install order. If an uninstall fails, wipe stops there, prints `wipe blocked <id>|<name>`, and exits 3 with NEMESIS still installed. Fix that package and wipe again.
+1. Every installed package tree, including locked core packages such as `usb-handler`, with uninstall hooks, in install order. If an uninstall fails, wipe stops there, prints `wipe blocked <id>|<name>`, and exits 3 with NEMESIS still installed; nothing after the failing package is touched. Uninstall packages individually before wiping whenever you can.
 2. Root CAs listed in `/data/nemesis/owned-cacerts`. Certificates NEMESIS did not add are not touched.
 3. Manager dalvik cache entries.
 4. `/system/app/NEMESIS.apk`
@@ -118,7 +119,22 @@ If `/system` stays read-only, wipe prints **`wipe incomplete`** and returns 1; C
 
 Stock apps are not restored or rewritten. They were never patched.
 
-### 5.4 `usb_bundle/uninstall_nemesis.sh`
+### 5.4 When a package blocks the wipe
+
+A package uninstall fails when its `preuninstall` hook exits nonzero — typical for locally built or forked packages whose backup paths no longer exist — or when its Android app will not uninstall. Wipe stops at the first such package and exits 3. If the package cannot be repaired, `--force` finishes the wipe without it:
+
+```sh
+/system/xbin/nemesis wipe --confirm --force
+```
+
+`--force` drops the failing package's registration and `/data/nemesis/apps/<id>` tree even though its hook did not finish, prints one `wipe forced <id>|<name>` line per carried package (plus `uninstall <id>: ... (forced)` notes on stderr), and continues with the rest of the wipe. Two costs:
+
+- `/system` edits the package would have restored in its hook stay in place until a firmware update rewrites `/system`. Note what the package changed before forcing.
+- If the Android app also refused to uninstall, it remains installed; remove it from Settings → Applications.
+
+Fix or uninstall the package and wipe clean when that is possible. Use `--force` when the hook cannot succeed: a half-wiped state is worse, because `/data/nemesis/packages.db` rows survive a stock firmware update (reported in #68), so residue from a stopped wipe can outlive a reflash.
+
+### 5.5 `usb_bundle/uninstall_nemesis.sh`
 
 If `/system/xbin/nemesis` exists, it runs `nemesis wipe --confirm` and reboots. If the CLI is already gone, it best-effort remounts, deletes the same `/system` files, strips the QuickBoot marker, and removes `/data/nemesis` and `/data/local/tmp/nemesis`. Prefer the CLI wipe when the binary is still there.
 
