@@ -146,6 +146,7 @@ Read about NEMESIS, what it is exploiting, what it features, and its use manual.
 | [05 - Run scripts](05-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
 | [06 - Cloud Store API](06-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
 | [07 - Submit a package](07-Submit-a-Package.md) | Step by step: from an xwtk.Account to a listing in the NEMESIS Package Store. |
+| [08 - Troubleshooting Engineering Mode](08-Troubleshooting-Engineering-Mode.md) | Entry failures: no password prompt, silent OK, code selection, OTA status. |
 
 Documents **01** and **03** are the only ones that describe the DSP Update Agent path and on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **02**, **04**, **05** and **06** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
 
