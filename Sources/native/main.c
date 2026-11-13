@@ -17,7 +17,7 @@ static void usage(void) {
             "nemesis usb-info [--list]\n"
             "nemesis compat-check <os> <models> [depends]\n"
             "nemesis version\n"
-            "nemesis wipe --confirm [--no-reboot]\n"
+            "nemesis wipe --confirm [--no-reboot] [--force]\n"
             "nemesis watchdog | svcmgr | usb-handler | ping\n");
 }
 

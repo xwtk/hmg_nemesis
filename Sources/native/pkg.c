@@ -627,12 +627,15 @@ static int run_named_hook(const ini_file *ini, const char *root, const char *key
 }
 
 /* force: carry on when preuninstall or pm uninstall fails. Without it the
- * package stays registered with its files, and its services run again. */
-static int uninstall_tree(const char *id, int allow_locked, int force) {
+ * package stays registered with its files, and its services run again.
+ * tolerated (may be NULL): set when force carried past a failed
+ * preuninstall or app removal, so a caller can report it. */
+static int uninstall_tree(const char *id, int allow_locked, int force, int *tolerated) {
     pkg_rec rec;
     char root[MAX_PATH], meta[MAX_PATH], tmpun[MAX_PATH];
     ini_file ini;
-    int have_ini = 0, rc;
+    int have_ini = 0, rc, pmrc;
+    if (tolerated) *tolerated = 0;
     if (pkg_find(id, &rec) != 0) {
         fprintf(stderr, "package not installed: %s\n", id);
         return 1;
@@ -654,12 +657,23 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
             start_pkg_services(id);
             return 5;
         }
-        if (pm_uninstall_apks(&ini, root) && !force) {
+        if (rc != 0) {
+            log_msg("uninstall %s: preuninstall exited %d (forced)", id, rc);
+            fprintf(stderr, "uninstall %s: preuninstall exited %d (forced)\n", id, rc);
+            if (tolerated) *tolerated = 1;
+        }
+        pmrc = pm_uninstall_apks(&ini, root);
+        if (pmrc && !force) {
             log_msg("uninstall %s: apps still installed", id);
             fprintf(stderr, "uninstall failed: %s: Android app still installed\n", id);
             ini_free(&ini);
             start_pkg_services(id);
             return 5;
+        }
+        if (pmrc) {
+            log_msg("uninstall %s: apps still installed (forced)", id);
+            fprintf(stderr, "uninstall %s: Android app still installed (forced)\n", id);
+            if (tolerated) *tolerated = 1;
         }
     }
     svc_remove_prefix(id);
@@ -906,7 +920,7 @@ int cmd_uninstall(int argc, char **argv) {
         fprintf(stderr, "uninstall blocked: other packages depend on %s\n", id);
         return 4;
     }
-    rc = uninstall_tree(id, 0, force);
+    rc = uninstall_tree(id, 0, force, NULL);
     if (rc == 0) {
         fprintf(stdout, "ok uninstalled %s\n", id);
         fflush(stdout);
@@ -1363,16 +1377,20 @@ void stop_daemons(void) {
 }
 
 /* Exit codes: 0 wiped (and rebooting), 1 core files left, 3 a package
- * uninstall failed and nothing past it was touched. */
+ * uninstall failed and nothing past it was touched. --force carries past a
+ * failing package (hook that exits nonzero, app that will not uninstall,
+ * registration that no longer resolves): the package is dropped without its
+ * hook finishing and the wipe continues, one "wipe forced" line per package. */
 int cmd_wipe(int argc, char **argv) {
     pkg_rec *list = NULL;
-    int n = 0, i, confirm = 0, reboot = 1;
+    int n = 0, i, confirm = 0, reboot = 1, force = 0, tol;
     for (i = 0; i < argc; i++) {
         if (!strcmp(argv[i], "--confirm")) confirm = 1;
         else if (!strcmp(argv[i], "--no-reboot")) reboot = 0;
+        else if (!strcmp(argv[i], "--force")) force = 1;
     }
     if (!confirm) {
-        fprintf(stderr, "usage: nemesis wipe --confirm [--no-reboot]\n");
+        fprintf(stderr, "usage: nemesis wipe --confirm [--no-reboot] [--force]\n");
         return 1;
     }
     ensure_dirs();
@@ -1383,12 +1401,28 @@ int cmd_wipe(int argc, char **argv) {
     for (i = 0; i < n; i++) {
         fprintf(stdout, "wipe step uninstall %s|%s\n", list[i].id, list[i].name);
         fflush(stdout);
-        if (uninstall_tree(list[i].id, 1, 0) != 0) {
+        tol = 0;
+        if (uninstall_tree(list[i].id, 1, force, &tol) != 0) {
+            if (force) {
+                /* Only "package not installed" is reachable here with force
+                 * (locked rows are allowed): the registration did not
+                 * resolve on re-read. The database itself is removed at the
+                 * end of the wipe, so drop the row and go on. */
+                log_msg("wipe forced past %s", list[i].id);
+                fprintf(stdout, "wipe forced %s|%s\n", list[i].id, list[i].name);
+                fflush(stdout);
+                continue;
+            }
             log_msg("wipe blocked by %s", list[i].id);
             fprintf(stdout, "wipe blocked %s|%s\n", list[i].id, list[i].name);
             fflush(stdout);
             free(list);
             return 3;
+        }
+        if (tol) {
+            log_msg("wipe forced past %s", list[i].id);
+            fprintf(stdout, "wipe forced %s|%s\n", list[i].id, list[i].name);
+            fflush(stdout);
         }
     }
     free(list);

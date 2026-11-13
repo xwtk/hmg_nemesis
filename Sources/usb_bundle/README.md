@@ -54,7 +54,9 @@ Same package `id` already installed → update confirm in Manager. The
 ## Wipe
 
 Manager → Wipe NEMESIS, or `nemesis wipe --confirm`. That is the only path that
-removes locked packages and deletes the CLI. Stock apps are not touched.
+removes locked packages and deletes the CLI. Stock apps are not touched. A
+package whose uninstall hook fails blocks the wipe; `nemesis wipe --confirm
+--force` finishes the wipe past it (document 03, section 5.4).
 
 `uninstall_nemesis.sh` calls wipe when the CLI is present.
 
