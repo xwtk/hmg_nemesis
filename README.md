@@ -27,26 +27,15 @@ For your car to be compatible with NEMESIS, it has to:
 
 1. Have an Android based Gen5W HU (version must have S5W_M in it in General Settings > SW Info). S5W_L is not supported, it is a fundamentally different hardware and software combination.
 
-2. It has to have OTA update support (not necessary to have OTA Update subscription) as NEMESIS utilizes a flaw in the OTA update logic as an entry point for its installation procedure. Some cars may still not be compatible even in that case, it can only be understood once you try to install.
 
-### **Cars known not to work with NEMESIS**
+## Installation Guidance
 
-| Name | Description |
-| ---- | ----------- |
-| Any car with no OTA updates capability | NEMESIS uses a flaw in OTA updates system to install itself, if your car does not have OTA updates, it does not have that flaw. |
-| Any Canadian HMG car | No Canadian HMG vehicle has support for OTA updates, despite Update OTA being shown for some in the Engineering Mode menu. |
-| Any car with S5W_L HU | Fundamentally different hardware and software architecture, does not run Android, NEMESIS cannot be ported in any shape or form there. |
-| Hyundai Elantra / Kia Forte / Hyundai Ioniq 6 | Despite having OTA updates support, these cars use different schemes which do not have the required flaw for NEMESIS. |
+First of all, I want to express my sinecere gratitude to user sin from Gen5W/ccNC community Discord, he has contributed his new installation architecture for NEMESIS to become available to pretty much all Gen5W head units.
 
-### **Will there be support for incompatible cars in the future?**
+Because of this, we now have 2 methods available for installation, the first method is the Update OTA method which has been the way of installing NEMESIS from the beginning (option 1), the second method requires slightly more work, but it does not depend on OTA update capabilities of the car.
 
-**Not** guaranteed, other members are working on porting NEMESIS to cars such as Ioniq 6 and Canadian vehicles, check Discord for more information.
 
-### **What will happen if I try to install?**
-
-Most likely nothing, NEMESIS won't install.
-
-## **Quick Installation Guidance**
+## **Quick Installation Guidance (Option 1)**
 
 | Step | Guidance |
 | ---- | -------- |
@@ -56,6 +45,24 @@ Most likely nothing, NEMESIS won't install.
 | 4 | Insert into the car's HU USB port, messages such as "No Supported Files" are expected. |
 | 5 | Navigate to Engineering Mode (use web to search on how to do so), open USB Copy, select Update DSP |
 | 6 | Tap on Update OTA (existence of this doesn't mean your car has OTA support), if you see a loading animation come up on the status bar in the top right, everything is going as planned. Wait for installation to complete and the HU to restart. |
+
+
+## **Quick Installation Guidance (Option 2)**
+
+| Step | Guidance |
+| ---- | -------- |
+| 1 | Download the `nemesis-usb-update-package.7z` asset from the [latest release](https://github.com/xwtk/hmg_nemesis/releases/latest) onto your computer. |
+| 2 | Prepare an exFAT or FAT32 formatted blank USB drive. |
+| 3 | Extract the contents of the downloaded tar file onto the root of the USB. |
+| 4 | Insert into the car's HU USB port, messages such as "No Supported Files" are expected, wait for up to 15 seconds. |
+| 5 | Restart the HU, this can be done by pressing the reset pinhole for example. |
+| 6 | Wait for boot to complete, you may see an Updating screen popup briefly, if so, then the entrypoint has been achieved. Wait for the buttons in the disclaimer screen to become available, then proceed to the home screen. |
+| 7 | **DO NOT OPERATE THE HU**, wait for a few seconds for NEMESIS Installation Interface to popup. |
+| 8 | Proceed with installation. |
+
+### **If you decide to not proceed with the installation**
+
+If you have mistakenly closed the installer, NEMESIS Installation Interface will popup on every HU boot, you can restart the HU to see it again. Press Decline in the interface to remove the installer and restore the system to factory state.
 
 ## Updating NEMESIS
 
@@ -75,7 +82,7 @@ Most likely nothing, NEMESIS won't install.
 
 OR
 
-**Settings → Check for updates** in Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
+**Settings → Check for updates** in NEMESIS Manager does the same over the internet, once the update is on the portal. You may additionally get a popup saying new update is ready to be installed, that is the automatic update doing its job.
 
 ## **Changelog**
 
