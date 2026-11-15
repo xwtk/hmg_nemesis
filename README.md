@@ -55,7 +55,7 @@ Because of this, we now have 2 methods available for installation, the first met
 | 2 | Prepare an exFAT or FAT32 formatted blank USB drive. |
 | 3 | Extract the contents of the downloaded tar file onto the root of the USB. |
 | 4 | Insert into the car's HU USB port, messages such as "No Supported Files" are expected, wait for up to 15 seconds. |
-| 5 | Restart the HU, this can be done by pressing the reset pinhole for example. |
+| 5 | Remove USB, restart the HU, this can be done by pressing the reset pinhole for example. |
 | 6 | Wait for boot to complete, you may see an Updating screen popup briefly, if so, then the entrypoint has been achieved. Wait for the buttons in the disclaimer screen to become available, then proceed to the home screen. |
 | 7 | **DO NOT OPERATE THE HU**, wait for a few seconds for NEMESIS Installation Interface to popup. |
 | 8 | Proceed with installation. |
