@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEMESIS Installer</string>
+    <string name="title">NEMESIS</string>
+    <string name="credit">By Gor Mirzoyan (xwtk.cloud)</string>
+    <string name="sin_credit">Installer made by Sin</string>
+    <string name="warning">You have reached the NEMESIS Installation Interface.\n\nConfirm your intention of installing NEMESIS on this head unit, risk of rendering this device inoperable always exists and you take full responsibility for it.\n\nIf you decide not to proceed, press Decline to begin the cleanup process of the installer.\n\nLearn more about NEMESIS by scanning the QR code.</string>
+    <string name="qr_url">xwtk.cloud/services/nemesis</string>
+    <string name="proceed">Proceed</string>
+    <string name="decline">Decline</string>
+    <string name="working">Please wait…</string>
+</resources>

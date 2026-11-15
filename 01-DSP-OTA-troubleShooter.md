@@ -1,6 +1,8 @@
-# DSP OTA `troubleShooter` path (tested on firmware 260507)
+# Entrypoint variant 1 - DSP OTA `troubleShooter` (tested on firmware 260507)
 
-This document is the full technical record of the path used to run unsigned code as **uid 0** on the Kia EV6 Gen5W head unit during Engineer Mode **DSP Update OTA**. It is independent of the NEMESIS product UI. Once you understand the slot, you can drop any `troubleShooter` script into an `ota_package.tar` and the Update Agent will execute it on the next DSP OTA, with the same privileges as the install we ship.
+This is the **first entrypoint variant** for NEMESIS: the path NEMESIS historically used to first run unsigned code as **uid 0** on the Kia EV6 Gen5W head unit during Engineer Mode **DSP Update OTA**. For the second entrypoint variant, see [02 - USB update package](02-USB-Update-Package.md).
+
+This document is the full technical record of this entrypoint. It is independent of the NEMESIS product UI. Once you understand the slot, you can drop any `troubleShooter` script into an `ota_package.tar` and the Update Agent will execute it on the next DSP OTA, with the same privileges as the install we ship.
 
 Target:
 

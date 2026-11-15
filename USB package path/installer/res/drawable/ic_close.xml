@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stock Setup clear glyph (co_btn_input_cancel_*), night set. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true" android:drawable="@drawable/co_btn_close_push" />
+    <item android:drawable="@drawable/co_btn_close_nor" />
+</selector>

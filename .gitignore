@@ -1,0 +1,21 @@
+*/out/
+NEMESIS Source/out/
+NEMESIS Source/native/*.o
+NEMESIS Source/native/nemesis
+NEMESIS Source/manager/*.apk
+NEMESIS Source/manager/classes/
+NEMESIS Source/manager/gen/
+NEMESIS Source/manager/classes.dex
+NEMESIS Source/manager/res.apk
+NEMESIS Source/manager/unsigned.apk
+NEMESIS Source/manager/nemesis.keystore
+USB package path/installer/classes/
+USB package path/installer/gen/
+USB package path/installer/classes.dex
+USB package path/installer/res.apk
+USB package path/installer/unsigned.apk
+USB package path/installer/NEMESIS-Installer.apk
+USB package path/installer/nemesis.keystore
+**/__pycache__/
+*.pyc
+

@@ -19,7 +19,7 @@ You bear complete responsibility for any procedure with your car and its compone
 
 ## Packages
 
-Discover packages to install on your car in the [NEMESIS Package Store](https://xwtk.cloud/services/nemesis#package-store). Made one of your own? [Submit it to the store](07-Submit-a-Package.md).
+Discover packages to install on your car in the [NEMESIS Package Store](https://xwtk.cloud/services/nemesis#package-store). Made one of your own? [Submit it to the store](08-Submit-a-Package.md).
 
 ## Compatibility Check
 
@@ -50,7 +50,7 @@ Most likely nothing, NEMESIS won't install.
 
 | Step | Guidance |
 | ---- | -------- |
-| 1 | Download [NEMESIS Installation Package](ota_package.tar) onto your computer. |
+| 1 | Download the `ota_package.tar` asset from the [latest release](https://github.com/xwtk/hmg_nemesis/releases/latest) onto your computer. |
 | 2 | Prepare an exFAT or FAT32 formatted blank USB drive. |
 | 3 | Copy the downloaded tar file onto the USB, do not extract or repack the archive file. |
 | 4 | Insert into the car's HU USB port, messages such as "No Supported Files" are expected. |
@@ -69,7 +69,7 @@ Most likely nothing, NEMESIS won't install.
 
 | **Step** | **Description** |
 |----------|-----------------|
-| 1 | Copy the two files inside the [Update](Update) folder, `NEMESIS.data` and `nemesis-1.16.7.zip`, to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
+| 1 | From the [latest release](https://github.com/xwtk/hmg_nemesis/releases/latest), download the `nemesis-update-<version>.zip` asset and the `NEMESIS.data` next to it, then copy both to the root of a blank exFAT or FAT32 USB drive. Do not extract the zip or put them in a folder. |
 | 2 | Insert the USB drive into the car's HU USB port with Android running. |
 | 3 | Choose **Yes** when NEMESIS asks to update. The HU restarts when the update is done. |
 
@@ -131,7 +131,7 @@ OR
 - **Package descriptors `version=1.1`.** New keys: `type`, `package-version`, `short-desc`, `os`, `models` and `depends`. `version=1.0` descriptors still work. A package cannot be uninstalled while another one depends on it.
 - **Manager.** New layout: My Packages, Package Store, Android Apps and Settings. Root certificates ship with it so HTTPS works on the unit. Settings has a Reboot button. Running a script package shows what the script printed as a toast. Auto-launch also runs when the screen comes back on with Android still up.
 - **Fixes.** NEMESIS missing after a remote start, the Manager crash about `GET_TASKS` and after Close, the service staying disabled after repeated crashes, Manager opening on the first press, and Setup covering Manager after it opened.
-- **Self-hosted stores.** The store API is documented in [06 - Cloud Store API](06-Cloud-Store-API.md), so a fork can run its own.
+- **Self-hosted stores.** The store API is documented in [07 - Cloud Store API](07-Cloud-Store-API.md), so a fork can run its own.
 
 ## **Documentation**
 
@@ -139,15 +139,16 @@ Read about NEMESIS, what it is exploiting, what it features, and its use manual.
 
 | Document | Contents |
 |----------|----------|
-| [01 - DSP OTA troubleShooter Path](01-DSP-OTA-troubleShooter.md) | How the firmware runs unsigned DSP OTA members as root, and how that path is reused. |
-| [02 - Debugging Execution Interface](02-Debugging-Execution-Interface.md) | What NEMESIS is on the unit after it is present: features, how you open it, CLI and Manager usage. |
-| [03 - Install and uninstall](03-Install-and-Uninstall.md) | How NEMESIS is written onto `/system` and how it is removed. |
-| [04 - Packages](04-Packages.md) | Installable packages: metadata, layout, builder, lifecycle. |
-| [05 - Run scripts](05-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
-| [06 - Cloud Store API](06-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
-| [07 - Submit a package](07-Submit-a-Package.md) | Step by step: from an xwtk.Account to a listing in the NEMESIS Package Store. |
+| [01 - Entrypoint variant 1: DSP OTA troubleShooter](01-DSP-OTA-troubleShooter.md) | First entrypoint variant. How the firmware runs unsigned DSP OTA members as root, and how that path is reused. |
+| [02 - Entrypoint variant 2: USB update package](02-USB-Update-Package.md) | Second entrypoint variant. The stock USB system-package upgrade path and the three steps that lead to a NEMESIS install. |
+| [03 - Debugging Execution Interface](03-Debugging-Execution-Interface.md) | What NEMESIS is on the unit after it is present: features, how you open it, CLI and Manager usage. |
+| [04 - Install and uninstall](04-Install-and-Uninstall.md) | How NEMESIS is written onto `/system` and how it is removed. |
+| [05 - Packages](05-Packages.md) | Installable packages: metadata, layout, builder, lifecycle. |
+| [06 - Run scripts](06-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
+| [07 - Cloud Store API](07-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
+| [08 - Submit a package](08-Submit-a-Package.md) | Step by step: from an xwtk.Account to a listing in the NEMESIS Package Store. |
 
-Documents **01** and **03** are the only ones that describe the DSP Update Agent path and on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **02**, **04**, **05** and **06** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
+Documents **01**, **02** and **04** are the only ones that describe the entrypoint variants and the on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **03**, **05**, **06** and **07** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
 
 
 Developed by Gor Mirzoyan (xwtk.cloud).
