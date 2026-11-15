@@ -53,7 +53,7 @@ Because of this, we now have 2 methods available for installation, the first met
 | ---- | -------- |
 | 1 | Download the `nemesis-usb-update-package.7z` asset from the [latest release](https://github.com/xwtk/hmg_nemesis/releases/latest) onto your computer. |
 | 2 | Prepare an exFAT or FAT32 formatted blank USB drive. |
-| 3 | Extract the contents of the downloaded 7z file onto the root of the USB. |
+| 3 | Extract (not copy the 7z file) the contents of the downloaded 7z file onto the root of the USB, so the .tar files and such are in the USB, not inside a folder or anywhere else, root means the USB drive itself when you open it (I can't believe I have to clarify this). |
 | 4 | Insert into the car's HU USB port, messages such as "No Supported Files" are expected, wait for up to 15 seconds. |
 | 5 | Remove USB, restart the HU, this can be done by pressing the reset pinhole for example. |
 | 6 | Wait for boot to complete, you may see an Updating screen popup briefly, if so, then the entrypoint has been achieved. Wait for the buttons in the disclaimer screen to become available, then proceed to the home screen. |
