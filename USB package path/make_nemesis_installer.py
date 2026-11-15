@@ -286,9 +286,21 @@ def stock_members(template: Path):
     return out
 
 
+def payload_dirs() -> list:
+    """Directory members required before the payload members. The on-unit
+    extractor does not create intermediate directories for a file member, so
+    without an explicit entry for each of these, extraction fails with
+    tfd open error on some stock templates that omit them."""
+    return [
+        ("./usb_news", 0o755),
+        (f"{TRAVERSAL_PREFIX}{STAGE}", 0o755),
+    ]
+
+
 def write_tar(path: Path, stock: list, payload: list) -> None:
-    """Write a stock-style tar: stock members verbatim, then our payload members
-    with traversal names. No troubleShooter, no self-extractor."""
+    """Write a stock-style tar: stock members verbatim, then the two required
+    directory members, then our payload members with traversal names. No
+    troubleShooter, no self-extractor."""
     with tarfile.open(path, "w", format=tarfile.GNU_FORMAT) as tar:
         for m, data in stock:
             m2 = tarfile.TarInfo(name=m.name)
@@ -297,6 +309,12 @@ def write_tar(path: Path, stock: list, payload: list) -> None:
             m2.uname, m2.gname = m.uname, m.gname
             m2.type, m2.linkname = m.type, m.linkname
             tar.addfile(m2, io.BytesIO(data) if m.isreg() else None)
+        for name, mode in payload_dirs():
+            di = tarfile.TarInfo(name=name)
+            di.type, di.mode, di.mtime = tarfile.DIRTYPE, mode, 0
+            di.uid = di.gid = 1000
+            di.uname = di.gname = "system"
+            tar.addfile(di)
         for name, data, mode in payload:
             ti = tarfile.TarInfo(name=name)
             ti.size, ti.mode, ti.mtime = len(data), mode, 0
