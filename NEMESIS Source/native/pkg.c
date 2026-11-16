@@ -468,6 +468,30 @@ static int pm_uninstall_apks(const ini_file *ini, const char *root) {
  * put the previous value back. BOOT_COMPLETED is a one-shot broadcast; this
  * does not rebroadcast it.
  */
+/*
+ * The part of pm's answer worth showing. KitKat pm prints "\tpkg: <path>" first and
+ * its reason after it ("Failure [INSTALL_...]"), so the first line alone never says
+ * why. Returns the first line with Failure, Error or Exception, else the last
+ * non-empty line, or NULL. Cuts `out` into lines in place.
+ */
+static const char *pm_reason(char *out) {
+    char *line = out, *pick = NULL, *last = NULL, *nl, *s, *e;
+    while (line && *line) {
+        nl = strchr(line, '\n');
+        if (nl) *nl = 0;
+        s = line;
+        while (*s == ' ' || *s == '\t') s++;
+        e = s + strlen(s);
+        while (e > s && (e[-1] == '\r' || e[-1] == ' ')) *--e = 0;
+        if (*s) {
+            last = s;
+            if (!pick && (strstr(s, "Failure") || strstr(s, "Error") || strstr(s, "Exception"))) pick = s;
+        }
+        line = nl ? nl + 1 : NULL;
+    }
+    return pick ? pick : last;
+}
+
 static int pm_install_apk(const char *apk, const char *apkid) {
     char cmd[MAX_PATH + 80];
     char out[768];
@@ -512,10 +536,10 @@ static int pm_install_apk(const char *apk, const char *apkid) {
 
     if (ok) return 0;
     if (out[0]) {
-        char *nl = strchr(out, '\n');
-        if (nl) *nl = 0;
-        fprintf(stderr, "%s\n", out);
-        log_msg("pm install failed %s: %s", apk, out);
+        const char *why = pm_reason(out);
+        if (!why) why = "(no output)";
+        fprintf(stderr, "%s\n", why);
+        log_msg("pm install failed %s: %s", apk, why);
     } else {
         log_msg("pm install failed %s", apk);
     }
