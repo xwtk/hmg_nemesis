@@ -473,6 +473,8 @@ static int pm_install_apk(const char *apk, const char *apkid) {
     char out[768];
     char prev[96];
     char pathout[256];
+    char staged[MAX_PATH];
+    const char *install_from = apk;
     int cleared = 0;
     int ok;
 
@@ -486,7 +488,24 @@ static int pm_install_apk(const char *apk, const char *apkid) {
         }
     }
 
-    snprintf(cmd, sizeof(cmd), "/system/bin/pm install -r \"%s\"", apk);
+    /* pm on this firmware fails for an APK inside /data/nemesis/apps/<id>/ and succeeds for
+     * the same file under /data/local/tmp -- identical bytes, mode, owner and parent
+     * permissions -- so install from a staged copy, and fall back to the original path. */
+    {
+        const char *base = strrchr(apk, '/');
+        base = base ? base + 1 : apk;
+        snprintf(staged, sizeof(staged), "/data/local/tmp/nemesis/pm/%s", base);
+        run_cmd("/system/bin/mkdir -p /data/local/tmp/nemesis/pm");
+        snprintf(cmd, sizeof(cmd), "/system/bin/cp -f \"%s\" \"%s\"", apk, staged);
+        if (run_cmd(cmd) == 0) {
+            install_from = staged;
+            log_msg("pm: installing from staged copy %s", staged);
+        } else {
+            install_from = apk;
+            log_msg("pm: could not stage %s, installing in place", apk);
+        }
+    }
+    snprintf(cmd, sizeof(cmd), "/system/bin/pm install -r \"%s\"", install_from);
     run_cmd_capture(cmd, out, sizeof(out));
     ok = strstr(out, "Success") != NULL;
 
@@ -499,7 +518,7 @@ static int pm_install_apk(const char *apk, const char *apkid) {
             log_msg("pm: %s present with a different signer; uninstalling", apkid);
             snprintf(cmd, sizeof(cmd), "/system/bin/pm uninstall %s", apkid);
             run_cmd_capture(cmd, pathout, sizeof(pathout));
-            snprintf(cmd, sizeof(cmd), "/system/bin/pm install -r \"%s\"", apk);
+            snprintf(cmd, sizeof(cmd), "/system/bin/pm install -r \"%s\"", install_from);
             run_cmd_capture(cmd, out, sizeof(out));
             ok = strstr(out, "Success") != NULL;
         }
@@ -512,10 +531,18 @@ static int pm_install_apk(const char *apk, const char *apkid) {
 
     if (ok) return 0;
     if (out[0]) {
-        char *nl = strchr(out, '\n');
-        if (nl) *nl = 0;
-        fprintf(stderr, "%s\n", out);
-        log_msg("pm install failed %s: %s", apk, out);
+        /* pm prints "pkg: <path>" first and its verdict second; report the verdict. */
+        char *verdict = strstr(out, "Failure");
+        if (!verdict) verdict = strstr(out, "Success");
+        if (verdict) {
+            char *nl = strchr(verdict, '\n');
+            if (nl) *nl = 0;
+            fprintf(stderr, "%s\n", verdict);
+            log_msg("pm install failed %s: %s", apk, verdict);
+        } else {
+            fprintf(stderr, "%s\n", out);
+            log_msg("pm install failed %s: %s", apk, out);
+        }
     } else {
         log_msg("pm install failed %s", apk);
     }
