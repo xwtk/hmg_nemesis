@@ -81,7 +81,8 @@ static int zip_member_skip(const char *name) {
 }
 
 static int zip_iter(const char *zip,
-                    int (*cb)(const char *name, const unsigned char *data, size_t n, void *ctx),
+                    int (*cb)(const char *name, const unsigned char *data, size_t n,
+                              unsigned int mode, void *ctx),
                     void *ctx) {
     FILE *f;
     unsigned char hdr[46];
@@ -98,8 +99,9 @@ static int zip_iter(const char *zip,
         return -1;
     }
     for (i = 0; i < nument; i++) {
-        uint16_t method, namelen, extralen, commentlen, flags;
+        uint16_t method, namelen, extralen, commentlen, flags, made_by;
         uint32_t csize, usize, local_off;
+        unsigned int mode;
         char name[MAX_PATH];
         unsigned char local[30];
         unsigned char *cdata = NULL, *udata = NULL;
@@ -108,6 +110,15 @@ static int zip_iter(const char *zip,
             return -1;
         }
         flags = u16(hdr + 8);
+        /* Preserve the Unix mode stored in the external attributes when the archive was made
+         * on a Unix host; otherwise keep the historical 0644. Without this, a package that
+         * ships a binary arrives non-executable and its service dies at the first call. */
+        made_by = u16(hdr + 4);
+        mode = 0644;
+        if ((made_by >> 8) == 3) {
+            unsigned int ext = u32(hdr + 38);
+            if (ext >> 16) mode = (ext >> 16) & 07777;
+        }
         method = u16(hdr + 10);
         csize = u32(hdr + 20);
         usize = u32(hdr + 24);
@@ -161,7 +172,7 @@ static int zip_iter(const char *zip,
                 return -1;
             }
             if (method == 0) {
-                if (cb(name, cdata, csize, ctx) != 0) {
+                if (cb(name, cdata, csize, mode, ctx) != 0) {
                     free(cdata);
                     fclose(f);
                     return -1;
@@ -174,7 +185,7 @@ static int zip_iter(const char *zip,
                     fclose(f);
                     return -1;
                 }
-                if (cb(name, udata, usize, ctx) != 0) {
+                if (cb(name, udata, usize, mode, ctx) != 0) {
                     free(udata);
                     free(cdata);
                     fclose(f);
@@ -201,11 +212,12 @@ struct extract_ctx {
     const char *dest;
 };
 
-static int extract_cb(const char *name, const unsigned char *data, size_t n, void *v) {
+static int extract_cb(const char *name, const unsigned char *data, size_t n,
+                      unsigned int mode, void *v) {
     struct extract_ctx *c = v;
     char path[MAX_PATH];
     snprintf(path, sizeof(path), "%s/%s", c->dest, name);
-    return write_all(path, data, n, 0644);
+    return write_all(path, data, n, mode);
 }
 
 int zip_extract(const char *zip, const char *dest) {
@@ -223,7 +235,9 @@ struct file_ctx {
     int depth;
 };
 
-static int file_cb(const char *name, const unsigned char *data, size_t n, void *v) {
+static int file_cb(const char *name, const unsigned char *data, size_t n,
+                   unsigned int mode, void *v) {
+    (void)mode;
     struct file_ctx *c = v;
     const char *base = name;
     const char *sl;
