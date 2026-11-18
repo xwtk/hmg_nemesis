@@ -52,7 +52,7 @@ static int lookup(const char *id, char *ver, size_t cap) {
 static void test_ini(void) {
     ini_file ini;
     const char *v;
-    char big[2048];
+    char big[2049];
     CHECK(ini_load_mem(&ini, "[nemesis]\r\nid=a.b\r\nname=  Spaced Name  \r\n") == 0, "crlf");
     v = ini_get(&ini, "nemesis", "id");
     CHECK(v && !strcmp(v, "a.b"), "crlf id '%s'", v ? v : "(null)");
@@ -158,6 +158,20 @@ static void test_meta(void) {
     snprintf(text, sizeof(text), "[nemesis]\nid=x\ndetailed-desc=\"%s\"\n", longs);
     CHECK(parse(text, &ini, &m, err, sizeof(err)) == 0, "256 ok: %s", err);
     ini_free(&ini);
+
+    {
+        static char big[1100], t2[2300];
+        memset(big, 'c', 1024);
+        big[1024] = 0;
+        snprintf(t2, sizeof(t2), "[nemesis]\nid=x\nos=\"%s\"\nmodels=\"%s\"\n", big, big);
+        CHECK(parse(t2, &ini, &m, err, sizeof(err)) == 0, "os/models 1024 ok: %s", err);
+        ini_free(&ini);
+        big[1024] = 'c';
+        big[1025] = 0;
+        snprintf(t2, sizeof(t2), "[nemesis]\nid=x\nmodels=\"%s\"\n", big);
+        CHECK(parse(t2, &ini, &m, err, sizeof(err)) != 0 && strstr(err, "models"), "models 1025 rejected");
+        ini_free(&ini);
+    }
 
     CHECK(parse("[nemesis]\nid=x\npackage-version=1.a\n", &ini, &m, err, sizeof(err)) != 0, "bad pkg ver");
     ini_free(&ini);
