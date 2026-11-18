@@ -250,6 +250,48 @@ static void test_compat(void) {
           "other firmware, same car '%s'", r);
 }
 
+static void test_long_targets(void) {
+    static const char *keys[] = {"os", "models"};
+    static const char *targets[] = {"ECOKMC.USA.0000.V015.012.260507", "cvev_us"};
+    static const size_t lengths[] = {255, 256, 1023, 1024};
+    size_t k, n, i;
+    int quoted;
+    for (k = 0; k < 2; k++) {
+        for (n = 0; n < sizeof(lengths) / sizeof(lengths[0]); n++) {
+            char value[1025];
+            size_t prefix = lengths[n] - strlen(targets[k]);
+            for (i = 0; i < prefix; i++) value[i] = i % 2 ? ',' : 'x';
+            value[prefix - 1] = ',';
+            strcpy(value + prefix, targets[k]);
+            for (quoted = 0; quoted <= 1; quoted++) {
+                ini_file ini;
+                pkg_meta m;
+                char text[1200], err[128], reasons[128];
+                int rc;
+                const char *quote = quoted ? "\"" : "";
+                snprintf(text, sizeof(text),
+                         "[nemesis]\nversion=1.1\nid=long.targets\n%s=%s%s%s\n%s=none\n",
+                         keys[k], quote, value, quote, keys[1 - k]);
+                rc = parse(text, &ini, &m, err, sizeof(err));
+                if (lengths[n] == 1024) {
+                    CHECK(rc != 0 && strstr(err, "too long"),
+                          "%s overflow rejected (quoted=%d): %s", keys[k], quoted, err);
+                } else {
+                    CHECK(rc == 0, "%s %zu bytes (quoted=%d): %s", keys[k], lengths[n], quoted, err);
+                    if (rc == 0) {
+                        CHECK(!strcmp(k == 0 ? m.os : m.models, value), "%s preserved in full", keys[k]);
+                        CHECK(meta_compat(&m, targets[0], targets[1], NULL, reasons, sizeof(reasons)) ==
+                              (k == 0 ? COMPAT_FULL : COMPAT_PARTIAL), "%s tail target matches", keys[k]);
+                        CHECK(meta_compat(&m, "other.os", "other_model", NULL, reasons, sizeof(reasons)) ==
+                              COMPAT_NONE, "%s unlisted target rejected", keys[k]);
+                    }
+                }
+                ini_free(&ini);
+            }
+        }
+    }
+}
+
 static void test_escape(void) {
     char out[64];
     meta_escape_field("a|b%c\nd\re", out, sizeof(out));
@@ -263,6 +305,7 @@ int main(void) {
     test_meta();
     test_versions();
     test_compat();
+    test_long_targets();
     test_escape();
     printf("%d/%d meta host checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;

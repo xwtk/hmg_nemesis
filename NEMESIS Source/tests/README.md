@@ -4,7 +4,7 @@ Host tests run on a Linux PC with `make test-meta test-hooks`. They need `cc`, `
 
 | Test | What it checks |
 |------|----------------|
-| `meta_host_test.c` | `NEMESIS.data` parser (`make test-meta`) |
+| `meta_host_test.c` | `NEMESIS.data` parser, including long OS/model lists and their byte limits (`make test-meta`) |
 | `setup_press_test.py`, `store_logic_test.py` | Manager button-press and Package Store logic (needs a JDK) |
 | `check_manager_apk.py` | Built Manager APK is well formed |
 | `pkg_live_snapshot.sh` | `adb.tcp` and `wireless.projection` install/uninstall hooks, in a private namespace |

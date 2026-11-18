@@ -55,6 +55,7 @@
 
 #define MAX_PATH 512
 #define MAX_LINE 1024
+#define INI_VALUE_CAP 1024
 #define MAX_ID 96
 #define MAX_NAME 128
 #define MAX_QNAME 192
@@ -71,7 +72,7 @@
 typedef struct {
     char section[80];
     char key[80];
-    char val[1024];
+    char val[INI_VALUE_CAP];
 } ini_kv;
 
 typedef struct {
@@ -139,8 +140,8 @@ typedef struct {
     char short_desc[META_SHORT_MAX * 4 + 1];
     char detailed_desc[META_DETAIL_MAX * 4 + 1];
     char depends[512];
-    char os[256];
-    char models[256];
+    char os[INI_VALUE_CAP];
+    char models[INI_VALUE_CAP];
 } pkg_meta;
 
 /* Fills `ver` with the installed version of `id`; returns 1 when installed. */

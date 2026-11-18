@@ -36,8 +36,8 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `short-desc` | recommended | One line for lists. Over 64 characters is refused. |
 | `detailed-desc` | no | Text for the details screen. Over 256 characters is refused. |
 | `depends` | no | Comma list of `id` or `id@spec`, and `!id` or `!id@spec` for packages this one cannot live with. See below. |
-| `os` | no | Comma list of OS version globs, or `any`. Missing means `any`. |
-| `models` | no | Comma list of model globs, or `any`. Missing means `any`. |
+| `os` | no | Comma list of OS version globs, or `any`. Missing means `any`. Up to 1,023 bytes after unescaping. |
+| `models` | no | Comma list of model globs, or `any`. Missing means `any`. Up to 1,023 bytes after unescaping. |
 | `preinstall` | no | Script run **before** the tree is copied, cwd = staging dir |
 | `postinstall` | no | Script run **after** copy, APK install, and service register; cwd = `/data/nemesis/apps/<id>` |
 | `preuninstall` | no | Script run after services are stopped, before APKs/`rm` |
