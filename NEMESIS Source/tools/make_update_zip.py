@@ -103,6 +103,10 @@ def main() -> None:
             z.writestr(prefix + name, files[name])
     args.output.write_bytes(buf.getvalue())
     print(f"Wrote {args.output} ({len(buf.getvalue())} bytes, version {ver}, {len(files)} files)")
+    # The USB reader finds the zip through path= in the NEMESIS.data beside it.
+    stick = args.output.with_name("NEMESIS.data")
+    stick.write_text(f"[nemesis]\nversion=1.1\ntype=update\npath={args.output.name}\n")
+    print(f"Wrote {stick} (stick-root NEMESIS.data, path={args.output.name})")
 
 
 if __name__ == "__main__":
