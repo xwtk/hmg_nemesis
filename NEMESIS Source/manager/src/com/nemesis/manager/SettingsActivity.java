@@ -12,6 +12,9 @@ import java.util.ArrayList;
 /** Settings list, and the Quick-open button picker opened from it. */
 public class SettingsActivity extends Activity {
     private boolean picking;
+    /** Host-state checks loaded from native in the background so the Settings list opens at once. */
+    private volatile boolean otaBlocked;
+    private volatile boolean selinuxOff;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,7 +34,27 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (!picking) bindList();
+        if (picking) return;
+        bindList();
+        refreshHostStatus();
+    }
+
+    private void refreshHostStatus() {
+        new Thread(new Runnable() {
+            public void run() {
+                final boolean ota = "on".equals(Cli.run("ota-block", "status").trim());
+                String se = Cli.run("selinux", "status").trim();
+                final boolean se_off = "permissive".equals(se) || "disabled".equals(se);
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (isFinishing()) return;
+                        otaBlocked = ota;
+                        selinuxOff = se_off;
+                        bindList();
+                    }
+                });
+            }
+        }).start();
     }
 
     private void bindList() {
@@ -45,6 +68,10 @@ public class SettingsActivity extends Activity {
                     getString(R.string.auto_launch_sum), "auto", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.use_telematics),
                     getString(R.string.use_telematics_sum), "telematics", false));
+            rows.add(new TwoLineAdapter.Row(getString(R.string.block_ota),
+                    getString(R.string.block_ota_sum), "ota", false));
+            rows.add(new TwoLineAdapter.Row(getString(R.string.disable_selinux),
+                    getString(R.string.disable_selinux_sum), "selinux", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.check_updates),
                     getString(R.string.title) + " " + Ui.versionName(this), "update", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.reboot),
@@ -64,7 +91,10 @@ public class SettingsActivity extends Activity {
         } else {
             ArrayList<String> checked = new ArrayList<String>();
             if (Portal.useTelematics(this)) checked.add("telematics");
-            lv.setAdapter(new CheckAdapter(this, rows, checked, java.util.Collections.singletonList("telematics")));
+            if (otaBlocked) checked.add("ota");
+            if (selinuxOff) checked.add("selinux");
+            lv.setAdapter(new CheckAdapter(this, rows, checked,
+                    java.util.Arrays.asList("telematics", "ota", "selinux")));
         }
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
@@ -99,6 +129,12 @@ public class SettingsActivity extends Activity {
                 i.putExtra("nemesis_mode", "confirm_modem");
                 startActivity(i);
             }
+        } else if ("ota".equals(key)) {
+            if (otaBlocked) runToggle("ota-block", "off");
+            else startConfirm("confirm_ota_block");
+        } else if ("selinux".equals(key)) {
+            if (selinuxOff) runToggle("selinux", "on");
+            else startConfirm("confirm_selinux_off");
         } else if ("update".equals(key)) {
             Intent i = new Intent(this, DialogActivity.class);
             i.putExtra("nemesis_mode", "update_check");
@@ -112,5 +148,25 @@ public class SettingsActivity extends Activity {
             i.putExtra("nemesis_mode", "wipe");
             startActivity(i);
         }
+    }
+
+    private void startConfirm(String mode) {
+        Intent i = new Intent(this, DialogActivity.class);
+        i.putExtra("nemesis_mode", mode);
+        startActivity(i);
+    }
+
+    /** Runs `nemesis <args>` off the UI thread, then reloads status so the box reflects the change. */
+    private void runToggle(final String... args) {
+        new Thread(new Runnable() {
+            public void run() {
+                Cli.runRc(args);
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (!isFinishing()) refreshHostStatus();
+                    }
+                });
+            }
+        }).start();
     }
 }

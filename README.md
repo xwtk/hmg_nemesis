@@ -86,6 +86,15 @@ OR
 
 ## **Changelog**
 
+### 1.16.8
+
+- **Package Store installs.** Fixed `INSTALL_FAILED_INVALID_URI` when installing APKs through the Store (SmartTube, Gen5W Themer and others). `/data/nemesis/apps` was being created with umask 077 masking it to 0700, which the system uid cannot traverse; it is now set to 0755 and self-heals on the next `nemesis` command.
+- **Disable OTA system updates.** New Settings toggle (and a first-boot prompt) that stops online OTA update checks and removes any downloaded OTA package. Manual Update OTA and NEMESIS updates still work.
+- **Disable SELinux.** New Settings toggle that switches SELinux to Permissive and restores it on wipe.
+- **ADB.** New home tile with USB ADB and Wireless ADB toggles. Wireless ADB shows the `adb connect <ip>:5555` line when it is on. Restored on wipe.
+- **WiFi tile.** New home tile that opens the Wi-Fi picker. The first press warns, if Wi-Fi is off, that wireless projection will need a reboot to recover.
+- **Logs.** Left pane lists sources (NEMESIS, Logcat, services) and the right pane shows the selected log newest line first.
+
 ### 1.16.7
 
 - **Package Store from USB.** Installing a package that needs no other package first no longer fails at once with "Operation failed".

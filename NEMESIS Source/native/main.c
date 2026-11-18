@@ -18,6 +18,9 @@ static void usage(void) {
             "nemesis compat-check <os> <models> [depends]\n"
             "nemesis version\n"
             "nemesis wipe --confirm [--no-reboot]\n"
+            "nemesis ota-block on|off|status\n"
+            "nemesis selinux on|off|status\n"
+            "nemesis adb usb-on|usb-off|tcp-on|tcp-off|status\n"
             "nemesis watchdog | svcmgr | usb-handler | ping\n");
 }
 
@@ -60,6 +63,9 @@ int main(int argc, char **argv) {
     if (!strcmp(op, "usb-info")) return cmd_usb_info(argc > 2 && !strcmp(argv[2], "--list"));
     if (!strcmp(op, "compat-check")) return cmd_compat_check(argc - 2, argv + 2);
     if (!strcmp(op, "cacerts-install")) return cmd_cacerts_install(argc > 2 ? argv[2] : NULL);
+    if (!strcmp(op, "ota-block")) return cmd_ota_block(argc - 2, argv + 2);
+    if (!strcmp(op, "selinux")) return cmd_selinux(argc - 2, argv + 2);
+    if (!strcmp(op, "adb")) return cmd_adb(argc - 2, argv + 2);
     if (!strcmp(op, "watchdog")) return cmd_watchdog();
     if (!strcmp(op, "svcmgr")) return cmd_svcmgr();
     if (!strcmp(op, "usb-handler")) return cmd_usb_handler();

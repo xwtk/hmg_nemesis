@@ -1394,6 +1394,8 @@ int cmd_wipe(int argc, char **argv) {
     free(list);
     fprintf(stdout, "wipe step restore\n");
     fflush(stdout);
+    /* Put OTA, SELinux and ADB back to what they were before NEMESIS touched them. */
+    host_state_restore();
     stop_daemons();
     purge_manager_dalvik();
     if (remount_system(1) != 0)

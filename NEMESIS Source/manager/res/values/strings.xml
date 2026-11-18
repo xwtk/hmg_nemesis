@@ -119,4 +119,22 @@
     <string name="deps_unmet" formatted="false">\"%n\" needs these packages:%s\n\nInstall or update them from Package Store or a USB drive, then try again.</string>
     <string name="install_conflict" formatted="false">\"%n\" is incompatible with these installed packages. Uninstall them first:%s</string>
     <string name="update_blocked" formatted="false">This version of \"%n\" does not fit other installed packages that need it. Update or uninstall them first:%s</string>
+    <string name="block_ota">Disable OTA system updates</string>
+    <string name="block_ota_sum">Stop the vehicle from checking for and downloading online OTA updates.</string>
+    <string name="confirm_block_ota">Disabling OTA stops online over-the-air update checks and deletes any downloaded OTA packages. Continue?</string>
+    <string name="disable_selinux">Disable SELinux</string>
+    <string name="disable_selinux_sum">Set SELinux to Permissive so system policies no longer block root processes.</string>
+    <string name="confirm_disable_selinux">This HU has SELinux in enforcing mode, it must be set to permissive to ensure NEMESIS functions properly. Leaving it enabled will affect the ability to modify system components. Continue?</string>
+    <string name="adb">ADB</string>
+    <string name="adb_usb">USB ADB</string>
+    <string name="adb_usb_sum">Let adb connect over the USB cable.</string>
+    <string name="adb_tcp">Wireless ADB</string>
+    <string name="adb_tcp_sum">Let adb connect over the network (port 5555).</string>
+    <string name="adb_tcp_at">adb connect %s:5555</string>
+    <string name="adb_tcp_no_ip">No Wi-Fi address. Connect to Wi-Fi first.</string>
+    <string name="confirm_adb_usb">Enabling this feature will set the USB in device mode and disable accessory recognition, a male-to-male USB cable must be used to connect to this HU. Disable to restore functionality. Continue?</string>
+    <string name="confirm_adb_tcp">Enabling this feature will render wireless projection related features (if available) operate improperly. Disable to restore functionality. Continue?</string>
+    <string name="wifi_warn">Opening WiFi menu will disable wireless projection related features (if applicable). Reboot to restore functionality. Continue?</string>
+    <string name="log_nemesis">NEMESIS</string>
+    <string name="log_logcat">Logcat</string>
 </resources>

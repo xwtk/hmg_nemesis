@@ -240,6 +240,21 @@ public class DialogActivity extends Activity {
         } else if ("confirm_stop".equals(mode)) {
             msg.setText(custom != null ? custom : getString(R.string.confirm_stop).replace("%s", ""));
             confirm = true;
+        } else if ("confirm_ota_block".equals(mode)) {
+            msg.setText(R.string.confirm_block_ota);
+            confirm = true;
+        } else if ("confirm_selinux_off".equals(mode)) {
+            msg.setText(R.string.confirm_disable_selinux);
+            confirm = true;
+        } else if ("confirm_adb_usb".equals(mode)) {
+            msg.setText(R.string.confirm_adb_usb);
+            confirm = true;
+        } else if ("confirm_adb_tcp".equals(mode)) {
+            msg.setText(R.string.confirm_adb_tcp);
+            confirm = true;
+        } else if ("wifi_warn".equals(mode)) {
+            msg.setText(R.string.wifi_warn);
+            confirm = true;
         } else if ("invalid".equals(mode)) {
             msg.setText(custom != null ? custom : getString(R.string.invalid));
         } else if ("forbidden".equals(mode)) {
@@ -340,6 +355,31 @@ public class DialogActivity extends Activity {
         }
         if ("confirm_modem".equals(mode)) {
             Portal.setUseTelematics(this, true);
+            Ui.close(this);
+            return;
+        }
+        if ("confirm_ota_block".equals(mode)) {
+            runHostToggle(new String[] { "ota-block", "on" }, true);
+            return;
+        }
+        if ("confirm_selinux_off".equals(mode)) {
+            runHostToggle(new String[] { "selinux", "off" }, true);
+            return;
+        }
+        if ("confirm_adb_usb".equals(mode)) {
+            runHostToggle(new String[] { "adb", "usb-on" }, false);
+            return;
+        }
+        if ("confirm_adb_tcp".equals(mode)) {
+            runHostToggle(new String[] { "adb", "tcp-on" }, false);
+            return;
+        }
+        if ("wifi_warn".equals(mode)) {
+            new Thread(new Runnable() {
+                public void run() {
+                    Cli.runRc("root", "-c", "am start -a android.net.wifi.PICK_WIFI_NETWORK");
+                }
+            }).start();
             Ui.close(this);
             return;
         }
@@ -697,6 +737,29 @@ public class DialogActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (isFinishing()) return;
+                        Intent i = new Intent(getIntent());
+                        i.putExtra("nemesis_mode", rc == 0 ? "result_ok" : "result_fail");
+                        i.removeExtra("nemesis_message");
+                        bind(i);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /** Runs one `nemesis <args>` and shows result_ok/fail (showResult=true) or just closes. */
+    private void runHostToggle(final String[] args, final boolean showResult) {
+        showProgress(getString(R.string.working));
+        new Thread(new Runnable() {
+            public void run() {
+                final int rc = Cli.runRc(args);
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (isFinishing()) return;
+                        if (!showResult) {
+                            Ui.close(DialogActivity.this);
+                            return;
+                        }
                         Intent i = new Intent(getIntent());
                         i.putExtra("nemesis_mode", rc == 0 ? "result_ok" : "result_fail");
                         i.removeExtra("nemesis_message");

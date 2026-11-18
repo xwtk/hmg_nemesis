@@ -23,16 +23,21 @@ public class MainActivity extends Activity {
     private static final int ACT_LOG = 3;
     private static final int ACT_ENG = 4;
     private static final int ACT_DEALER = 5;
-    private static final int ACT_WIFI = 6;
+    private static final int ACT_ADB = 6;
+    private static final int ACT_WIFI = 7;
     private static final int[] LABELS = {
             R.string.store, R.string.settings, R.string.services,
-            R.string.logs, R.string.engineering, R.string.dealer, R.string.wifi,
+            R.string.logs, R.string.engineering, R.string.dealer,
+            R.string.adb, R.string.wifi,
     };
     private static final int[] ICONS = {
             R.drawable.ic_home_store, R.drawable.ic_home_settings,
             R.drawable.ic_home_services, R.drawable.ic_home_logs, R.drawable.ic_home_engineering,
-            R.drawable.ic_home_dealer, R.drawable.ic_home_wifi,
+            R.drawable.ic_home_dealer, R.drawable.ic_home_adb, R.drawable.ic_home_wifi,
     };
+    private static final String FLAG_PREFS = "flags";
+    private static final String KEY_OTA_ASKED = "ota_asked_version";
+    private static final String KEY_WIFI_WARNED = "wifi_warned";
     private static final int TILE_CHARS = 26;
     private static final int COLS = 4;
     private static final int ROWS = 2;
@@ -110,6 +115,7 @@ public class MainActivity extends Activity {
             Ui.showCredit(this);
             bindPackages();
             bindIcons();
+            maybeFirstBootOtaPrompt();
         } catch (Throwable t) {
             CrashLog.record(t);
             try {
@@ -311,7 +317,48 @@ public class MainActivity extends Activity {
         else if (idx == ACT_LOG) startActivity(new Intent(this, LogActivity.class));
         else if (idx == ACT_ENG) openComponent("-n " + ENG_COMPONENT);
         else if (idx == ACT_DEALER) openComponent("-n " + DEALER_COMPONENT);
-        else if (idx == ACT_WIFI) openComponent(WIFI_SETTINGS);
+        else if (idx == ACT_ADB) startActivity(new Intent(this, AdbActivity.class));
+        else if (idx == ACT_WIFI) openWifi();
+    }
+
+    /** First press on WiFi while it is off warns that wireless projection needs a reboot afterwards. */
+    private void openWifi() {
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(FLAG_PREFS, MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_WIFI_WARNED, false) && wifiOff()) {
+            prefs.edit().putBoolean(KEY_WIFI_WARNED, true).commit();
+            Intent i = new Intent(this, DialogActivity.class);
+            i.putExtra("nemesis_mode", "wifi_warn");
+            startActivity(i);
+            return;
+        }
+        openComponent(WIFI_SETTINGS);
+    }
+
+    private boolean wifiOff() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getSystemService(WIFI_SERVICE);
+            return wm != null && !wm.isWifiEnabled();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** Offer the OTA blocker once per installed NEMESIS version. */
+    private void maybeFirstBootOtaPrompt() {
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(FLAG_PREFS, MODE_PRIVATE);
+        String version = Ui.versionName(this);
+        if (version.length() == 0 || version.equals(prefs.getString(KEY_OTA_ASKED, ""))) return;
+        prefs.edit().putString(KEY_OTA_ASKED, version).commit();
+        handler.post(new Runnable() {
+            public void run() {
+                if (isFinishing()) return;
+                Intent i = new Intent(MainActivity.this, DialogActivity.class);
+                i.putExtra("nemesis_mode", "confirm_ota_block");
+                startActivity(i);
+            }
+        });
     }
 
     /** The module's feature file (not on units without one) or its network interface. */

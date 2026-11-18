@@ -8,25 +8,41 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
         <include layout="@layout/title_bar" />
-        <ScrollView
-            android:id="@+id/log_scroll"
+        <LinearLayout
+            android:orientation="horizontal"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:fillViewport="true"
-            android:paddingLeft="22dp"
-            android:paddingRight="22dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp">
-            <TextView
-                android:id="@+id/log_text"
-                android:textSize="18sp"
-                android:textColor="#ff888888"
-                android:typeface="monospace"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/loading" />
-        </ScrollView>
+            android:layout_weight="1">
+            <ListView
+                android:id="@+id/list"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:divider="@drawable/co_bg_list_line"
+                android:dividerHeight="1dp"
+                android:listSelector="@drawable/co_list_selector"
+                android:cacheColorHint="#00000000"
+                android:paddingTop="6dp" />
+            <ScrollView
+                android:id="@+id/log_scroll"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="3"
+                android:fillViewport="true"
+                android:paddingLeft="22dp"
+                android:paddingRight="22dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp">
+                <TextView
+                    android:id="@+id/log_text"
+                    android:textSize="18sp"
+                    android:textColor="#ff888888"
+                    android:typeface="monospace"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/loading" />
+            </ScrollView>
+        </LinearLayout>
         <LinearLayout
             android:orientation="horizontal"
             android:gravity="center"

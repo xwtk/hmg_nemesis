@@ -99,6 +99,10 @@ static void install_mount_wrap(void) {
 }
 
 int ensure_dirs(void) {
+    /* HMG's init hands us umask 077, which turns mkdir(0755) into 0700 and
+     * leaves /data/nemesis/apps unreadable by system — pm install then fails
+     * with INSTALL_FAILED_INVALID_URI. */
+    umask(0);
     mkdir_p(NEMESIS_ROOT, 0755);
     mkdir_p(NEMESIS_APPS, 0755);
     mkdir_p(NEMESIS_TMP, 0755);
@@ -109,6 +113,7 @@ int ensure_dirs(void) {
     mkdir_p(PIDS_DIR, 0755);
     mkdir_p(SESSION_DIR, 0755);
     mkdir_p(NEMESIS_BINDIR, 0755);
+    chmod(NEMESIS_APPS, 0755);
     chmod(NEMESIS_TMP, 0777);
     chmod(NEMESIS_LOGS, 0777);
     chmod(SESSION_DIR, 0777);

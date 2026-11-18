@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.16.7"
+#define NEMESIS_VERSION "1.16.8"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -215,6 +215,11 @@ int cmd_root(int argc, char **argv);
 int cmd_remount(int argc, char **argv);
 int cmd_log(int argc, char **argv);
 int cmd_usb_handler(void);
+
+int cmd_ota_block(int argc, char **argv);
+int cmd_selinux(int argc, char **argv);
+int cmd_adb(int argc, char **argv);
+void host_state_restore(void);
 
 int become_root(void);
 int su_listen(int fds[2]);
