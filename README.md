@@ -30,7 +30,7 @@ For your car to be compatible with NEMESIS, it has to:
 
 ## Installation Guidance
 
-First of all, I want to express my sinecere gratitude to user sin from Gen5W/ccNC community Discord, he has contributed his new installation architecture for NEMESIS to become available to pretty much all Gen5W head units.
+First of all, I want to express my sinecere gratitude to users sin and toxuin from Gen5W/ccNC community Discord, they have done massive contributions to the new installation architecture so NEMESIS is now available to pretty much all Gen5W head units.
 
 Because of this, we now have 2 methods available for installation, the first method is the Update OTA method which has been the way of installing NEMESIS from the beginning (option 1), the second method requires slightly more work, but it does not depend on OTA update capabilities of the car.
 
