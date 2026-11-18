@@ -57,10 +57,10 @@ CACERTS_DIR = SOURCE_ROOT / "boot" / "cacerts"
 # and the RSA-signed tar list). Copied as-is; we do not regenerate them.
 STICK_EXTRAS = ROOT / "installer" / "stick_extras"
 
-# Stick matrix. HMCSE and ECOHMCSE sit with the nudl-confirmed brands.
+# Stick matrix, including the SE product codes.
 # Regions outside {USA,CAN,KOR,MES,BRA,IDN,IND,JPN} do not appear in real
 # Gen5W firmware. Edit these lists to widen or narrow coverage.
-BRANDS = ["HMC", "KMC", "HMCSE", "ECOHMC", "ECOHMCSE", "ECOKMC", "GENESIS"]
+BRANDS = ["HMC", "KMC", "HMCSE", "KMCSE", "ECOHMC", "ECOHMCSE", "ECOKMC", "ECOKMCSE", "GENESIS"]
 REGIONS = ["USA", "CAN", "KOR", "MES", "BRA", "IDN", "IND", "JPN"]
 VARIANTS = ["0000", "1000"]
 VERSION = "V099.999.999999"
