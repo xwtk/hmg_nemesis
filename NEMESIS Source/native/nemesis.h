@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.16.8"
+#define NEMESIS_VERSION "1.16.9"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -64,6 +64,7 @@
 #define USB_PROMPT_SEC 60
 #define META_SHORT_MAX 64
 #define META_DETAIL_MAX 256
+#define META_LIST_MAX 1024
 #define COMPAT_FULL 0
 #define COMPAT_PARTIAL 1
 #define COMPAT_NONE 2
@@ -71,7 +72,7 @@
 typedef struct {
     char section[80];
     char key[80];
-    char val[1024];
+    char val[2048];
 } ini_kv;
 
 typedef struct {
@@ -139,8 +140,8 @@ typedef struct {
     char short_desc[META_SHORT_MAX * 4 + 1];
     char detailed_desc[META_DETAIL_MAX * 4 + 1];
     char depends[512];
-    char os[256];
-    char models[256];
+    char os[META_LIST_MAX + 1];
+    char models[META_LIST_MAX + 1];
 } pkg_meta;
 
 /* Fills `ver` with the installed version of `id`; returns 1 when installed. */

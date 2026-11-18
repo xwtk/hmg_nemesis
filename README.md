@@ -86,6 +86,11 @@ OR
 
 ## **Changelog**
 
+### 1.16.9
+
+- **Package metadata.** `os` and `models` in `NEMESIS.data` can now be up to 1024 characters each, up from 256.
+- **Update package.** The build now writes the stick-root `NEMESIS.data` with `path=` next to the zip.
+
 ### 1.16.8
 
 - **Package Store installs.** Fixed `INSTALL_FAILED_INVALID_URI` when installing APKs through the Store (SmartTube, Gen5W Themer and others). `/data/nemesis/apps` was being created with umask 077 masking it to 0700, which the system uid cannot traverse; it is now set to 0755 and self-heals on the next `nemesis` command.
