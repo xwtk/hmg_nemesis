@@ -9,5 +9,5 @@
     <string name="proceed">Proceed</string>
     <string name="decline">Decline</string>
     <string name="working">Please wait…</string>
-    <string name="submit_error">Something went wrong triggering the install. Check the USB stick is still inserted and press Proceed or Decline again.</string>
+    <string name="submit_error">Something went wrong triggering the install: %s\n\nCheck the USB stick is still inserted and press Proceed or Decline again.</string>
 </resources>

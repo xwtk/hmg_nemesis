@@ -189,7 +189,9 @@ public class InstallerActivity extends Activity {
         final String v = agree ? "1" : "0";
         new Thread(new Runnable() {
             public void run() {
-                boolean ok = false;
+                // Which step failed and why, so a stuck screen can be diagnosed
+                // from a photo instead of needing a logcat nobody can pull here.
+                String detail = null;
                 try {
                     // nemesis root on this unit runs with CapBnd=0xc0 (SETUID/SETGID only);
                     // no DAC_OVERRIDE, so it cannot read our default 0600. World-readable it.
@@ -199,18 +201,28 @@ public class InstallerActivity extends Activity {
                     fos.close();
                     f.setReadable(true, false);
                     f.setWritable(true, false);
-                    int rc = Runtime.getRuntime().exec(new String[]{"sh", "-c",
-                            "service call com.hkmc.misc 6 s16 NEMESISSVC"}).waitFor();
-                    ok = (rc == 0);
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    detail = "agreement write: " + t;
+                }
+                if (detail == null) {
+                    try {
+                        int rc = Runtime.getRuntime().exec(new String[]{"sh", "-c",
+                                "service call com.hkmc.misc 6 s16 NEMESISSVC"}).waitFor();
+                        if (rc != 0) {
+                            detail = "service call exit " + rc;
+                        }
+                    } catch (Throwable t) {
+                        detail = "service call: " + t;
+                    }
                 }
                 // A failure here (storage not yet writable right after boot, the
                 // misc service rejecting the transaction) must not leave the user
                 // stuck on "Please wait" forever with no way to retry.
-                if (!ok) {
+                if (detail != null) {
+                    final String d = detail;
                     runOnUiThread(new Runnable() {
                         public void run() {
-                            warning.setText(R.string.submit_error);
+                            warning.setText(getString(R.string.submit_error, d));
                             proceed.setEnabled(true);
                             decline.setEnabled(true);
                         }
