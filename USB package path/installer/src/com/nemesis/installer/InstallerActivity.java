@@ -189,6 +189,7 @@ public class InstallerActivity extends Activity {
         final String v = agree ? "1" : "0";
         new Thread(new Runnable() {
             public void run() {
+                boolean ok = false;
                 try {
                     // nemesis root on this unit runs with CapBnd=0xc0 (SETUID/SETGID only);
                     // no DAC_OVERRIDE, so it cannot read our default 0600. World-readable it.
@@ -198,12 +199,22 @@ public class InstallerActivity extends Activity {
                     fos.close();
                     f.setReadable(true, false);
                     f.setWritable(true, false);
+                    int rc = Runtime.getRuntime().exec(new String[]{"sh", "-c",
+                            "service call com.hkmc.misc 6 s16 NEMESISSVC"}).waitFor();
+                    ok = (rc == 0);
                 } catch (Throwable ignored) {
                 }
-                try {
-                    Runtime.getRuntime().exec(new String[]{"sh", "-c",
-                            "service call com.hkmc.misc 6 s16 NEMESISSVC"}).waitFor();
-                } catch (Throwable ignored) {
+                // A failure here (storage not yet writable right after boot, the
+                // misc service rejecting the transaction) must not leave the user
+                // stuck on "Please wait" forever with no way to retry.
+                if (!ok) {
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            warning.setText(R.string.submit_error);
+                            proceed.setEnabled(true);
+                            decline.setEnabled(true);
+                        }
+                    });
                 }
             }
         }).start();
