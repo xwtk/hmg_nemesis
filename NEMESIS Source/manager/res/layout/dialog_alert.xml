@@ -22,6 +22,27 @@
             android:paddingBottom="28dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
+        <TextView
+            android:id="@+id/progress_count"
+            android:textSize="20sp"
+            android:textColor="#ff62797f"
+            android:gravity="center"
+            android:visibility="gone"
+            android:paddingLeft="32dp"
+            android:paddingRight="32dp"
+            android:paddingBottom="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:max="100"
+            android:visibility="gone"
+            android:layout_marginLeft="32dp"
+            android:layout_marginRight="32dp"
+            android:layout_marginBottom="28dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
         <LinearLayout
             android:id="@+id/btn_bar"
             android:orientation="horizontal"

@@ -190,6 +190,12 @@ final class Portal {
 
     /** cancel, when given, is read at every buffer; the partial file is removed. */
     static File download(Context c, String url, String sha256, String name, AtomicBoolean cancel) throws Exception {
+        return download(c, url, sha256, name, cancel, null);
+    }
+
+    /** prog, when given, gets {bytes so far, Content-Length or -1}. */
+    static File download(Context c, String url, String sha256, String name, AtomicBoolean cancel,
+                         long[] prog) throws Exception {
         File dir = c.getCacheDir();
         File out = new File(dir, name);
         File tmp = new File(dir, name + ".part");
@@ -197,6 +203,10 @@ final class Portal {
         try {
             if (h.getResponseCode() != 200) throw new IOException("HTTP " + h.getResponseCode());
             MessageDigest md = MessageDigest.getInstance("SHA-256");
+            if (prog != null) {
+                prog[0] = 0;
+                prog[1] = h.getContentLength();
+            }
             InputStream in = h.getInputStream();
             OutputStream os = new FileOutputStream(tmp);
             try {
@@ -206,6 +216,7 @@ final class Portal {
                     if (cancel != null && cancel.get()) throw new Cancelled();
                     md.update(buf, 0, n);
                     os.write(buf, 0, n);
+                    if (prog != null) prog[0] += n;
                 }
             } finally {
                 os.close();

@@ -189,7 +189,7 @@ static void sanitize_extra(char *s) {
 }
 
 /* Bound wait: never stall USB Handler on a wedged Activity Manager. */
-static int spawn_am(char *const argv[]) {
+int spawn_am(char *const argv[]) {
     pid_t pid = fork();
     int st;
     if (pid < 0) return -1;
@@ -202,7 +202,7 @@ static int spawn_am(char *const argv[]) {
     return 0;
 }
 
-static void add_es(char **argv, int *n, const char *key, const char *val) {
+void add_es(char **argv, int *n, const char *key, const char *val) {
     if (!val || !val[0]) return;
     argv[(*n)++] = (char *)"--es";
     argv[(*n)++] = (char *)key;
@@ -320,13 +320,13 @@ static void usb_notify(const char *mode, const char *path, const char *id,
     wait_reply(reply, cap, USB_PROMPT_SEC);
 }
 
-static const char *usb_roots[] = {
-    USB0, USB0_MNT, USB1, USB1_MNT, USB2, USB2_MNT
-};
+/* The HU has one USB port. */
+static const char *usb_roots[] = {USB0, USB0_MNT};
+#define N_USB_ROOTS 2
 
 static int usb_meta_path(char *out, size_t cap) {
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < N_USB_ROOTS; i++) {
         snprintf(out, cap, "%s/NEMESIS.data", usb_roots[i]);
         if (is_file(out)) return 0;
     }
@@ -336,7 +336,7 @@ static int usb_meta_path(char *out, size_t cap) {
 static const char *usb_root_for(const char *meta) {
     int i;
     if (!meta) return USB0;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < N_USB_ROOTS; i++) {
         size_t n = strlen(usb_roots[i]);
         if (!strncmp(meta, usb_roots[i], n) && meta[n] == '/') return usb_roots[i];
     }
@@ -408,32 +408,30 @@ static void do_install(const char *full, char *reply, size_t cap) {
     } else if (!usb_confirm("confirm_install", full, info_id, info_name, reply, cap)) {
         return;
     }
+    /* Copied into the queue, so the stick may come out; Package Manager shows
+     * the progress, the risk prompt and any block reason. */
     {
-        char cmd[MAX_PATH + 64];
-        const char *upd = inst ? "--update " : "";
-        int rc;
-        snprintf(cmd, sizeof(cmd), "%s install %s'%s'", BIN_PATH, upd, full);
-        rc = run_cmd(cmd);
-        /* Not marked compatible: only a user on screen may accept the risk. */
-        if (rc == 20 && framework_up()) {
-            char rreply[128];
-            am_dialog("confirm_risk", full, info_id, info_name);
-            if (wait_reply(rreply, sizeof(rreply), USB_PROMPT_SEC) == 0 && reply_yes(rreply)) {
-                log_msg("install %s: user accepted compatibility risk", info_id);
-                snprintf(cmd, sizeof(cmd), "%s install %s--accept-risk '%s'", BIN_PATH, upd, full);
-                rc = run_cmd(cmd);
-            } else {
-                log_msg("install %s: compatibility risk declined", info_id);
-                return;
-            }
-        }
-        /* Dependents, dependencies or conflicts: Manager explains and offers the fix. */
-        if (rc >= 21 && rc <= 23) {
-            usb_notify("install_blocked", full, info_id, info_name, nreply, sizeof(nreply));
+        char cmd[MAX_PATH + 64], out[256], idv[MAX_ID];
+        char *argv[16];
+        int n = 0, rc;
+        snprintf(cmd, sizeof(cmd), "%s queue add '%s'", BIN_PATH, full);
+        rc = run_cmd_capture(cmd, out, sizeof(out));
+        log_msg("usb install %s: queue rc=%d %s", info_id, rc, out);
+        if (rc != 0) {
+            usb_notify("result_fail", full, info_id, info_name, nreply, sizeof(nreply));
             return;
         }
-        usb_notify(rc == 0 ? "result_ok" : "result_fail", full, info_id, info_name,
-                   nreply, sizeof(nreply));
+        snprintf(idv, sizeof(idv), "%s", info_id);
+        sanitize_extra(idv);
+        argv[n++] = (char *)"am";
+        argv[n++] = (char *)"start";
+        argv[n++] = (char *)"-n";
+        argv[n++] = (char *)MANAGER_PKGMGR;
+        argv[n++] = (char *)"-f";
+        argv[n++] = (char *)"0x10000000";
+        add_es(argv, &n, "focus_id", idv);
+        argv[n++] = NULL;
+        spawn_am(argv);
     }
 }
 

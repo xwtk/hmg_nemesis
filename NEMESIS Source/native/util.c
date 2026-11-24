@@ -76,6 +76,15 @@ int mkdir_p(const char *path, mode_t mode) {
     return 0;
 }
 
+/* Every nemesis call runs this: rewrite only on change, by rename, so a shell
+ * reading the wrapper never sees it truncated. */
+static void put_wrap(const char *path, const char *text) {
+    char cur[2048], tmp[MAX_PATH];
+    if (read_file(path, cur, sizeof(cur)) >= 0 && !strcmp(cur, text)) return;
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    if (write_file(tmp, text, 0755) == 0) rename(tmp, path);
+}
+
 static void install_mount_wrap(void) {
     static const char wrap[] =
         "#!/system/bin/sh\n"
@@ -95,7 +104,42 @@ static void install_mount_wrap(void) {
         "if [ -x /system/bin/mount ]; then exec /system/bin/mount \"$@\"; fi\n"
         "exec /system/bin/toolbox mount \"$@\"\n";
     mkdir_p(NEMESIS_BINDIR, 0755);
-    write_file(NEMESIS_BINDIR "/mount", wrap, 0755);
+    put_wrap(NEMESIS_BINDIR "/mount", wrap);
+}
+
+/* Reboot catchers. bin/reboot is also bound over /system/bin/reboot while a
+ * job runs; outside a job every one of them reboots for real. */
+static void install_reboot_wraps(void) {
+    static const char reboot_w[] =
+        "#!/system/bin/sh\n"
+        "[ -x /system/xbin/nemesis ] && exec /system/xbin/nemesis reboot \"$@\"\n"
+        "case \"$1\" in\n"
+        "-p) exec /system/bin/toolbox setprop sys.powerctl shutdown ;;\n"
+        "'') exec /system/bin/toolbox setprop sys.powerctl reboot ;;\n"
+        "esac\n"
+        "exec /system/bin/toolbox setprop sys.powerctl \"reboot,$1\"\n";
+    static const char setprop_w[] =
+        "#!/system/bin/sh\n"
+        "if [ -n \"$NEMESIS_JOB\" ] && [ \"$1\" = sys.powerctl ]; then\n"
+        "  case \"$2\" in\n"
+        "  shutdown*) exec /system/xbin/nemesis reboot -p ;;\n"
+        "  reboot,*) exec /system/xbin/nemesis reboot \"${2#reboot,}\" ;;\n"
+        "  *) exec /system/xbin/nemesis reboot ;;\n"
+        "  esac\n"
+        "fi\n"
+        "exec /system/bin/setprop \"$@\"\n";
+    static const char svc_w[] =
+        "#!/system/bin/sh\n"
+        "if [ -n \"$NEMESIS_JOB\" ] && [ \"$1\" = power ]; then\n"
+        "  case \"$2\" in\n"
+        "  reboot) shift 2; exec /system/xbin/nemesis reboot \"$@\" ;;\n"
+        "  shutdown) exec /system/xbin/nemesis reboot -p ;;\n"
+        "  esac\n"
+        "fi\n"
+        "exec /system/bin/svc \"$@\"\n";
+    put_wrap(NEMESIS_BINDIR "/reboot", reboot_w);
+    put_wrap(NEMESIS_BINDIR "/setprop", setprop_w);
+    put_wrap(NEMESIS_BINDIR "/svc", svc_w);
 }
 
 int ensure_dirs(void) {
@@ -123,6 +167,7 @@ int ensure_dirs(void) {
     chmod(NEMESIS_LOGFILE, 0666);
     chmod(BIN_PATH, 04755);
     install_mount_wrap();
+    install_reboot_wraps();
     return 0;
 }
 
@@ -424,7 +469,8 @@ int run_cmd_capture(const char *cmd, char *out, size_t cap) {
 
 int run_script(const char *script, const char *cwd, const char *uid_name) {
     pid_t pid;
-    int st;
+    int st, rc;
+    char hook[MAX_PATH];
     uid_t uid = 0;
     gid_t gid = 0;
     if (!script || !*script || !strcmp(script, "N/A")) return 0;
@@ -437,8 +483,20 @@ int run_script(const char *script, const char *cwd, const char *uid_name) {
         gid = 1000;
     }
     chmod(script, 0755);
+    /* A queued job marks its hooks, so a reboot mid-hook shows as unclean. */
+    {
+        const char *job = getenv("NEMESIS_JOB");
+        hook[0] = 0;
+        if (job && *job >= '0' && *job <= '9') {
+            snprintf(hook, sizeof(hook), "%s/%08d.hook", QUEUE_DIR, atoi(job));
+            write_file(hook, script, 0644);
+        }
+    }
     pid = fork();
-    if (pid < 0) return -1;
+    if (pid < 0) {
+        if (hook[0]) unlink(hook);
+        return -1;
+    }
     if (pid == 0) {
         if (cwd && *cwd) chdir(cwd);
         setenv("PATH", NEMESIS_PATH, 1);
@@ -450,9 +508,9 @@ int run_script(const char *script, const char *cwd, const char *uid_name) {
         execl("/system/bin/sh", "sh", script, (char *)NULL);
         _exit(127);
     }
-    if (waitpid(pid, &st, 0) < 0) return -1;
-    if (WIFEXITED(st)) return WEXITSTATUS(st);
-    return 1;
+    rc = waitpid(pid, &st, 0) < 0 ? -1 : WIFEXITED(st) ? WEXITSTATUS(st) : 1;
+    if (hook[0]) unlink(hook);
+    return rc;
 }
 
 int pid_alive(pid_t pid) {
@@ -519,7 +577,7 @@ static unsigned long proc_starttime(pid_t pid) {
  * tmpfs /dev changes on every boot and marks which boot wrote the file. */
 #define BOOT_TOKEN "/dev/.nemesis-boot"
 
-static int boot_token(char *out, size_t cap) {
+int boot_token(char *out, size_t cap) {
     char tmp[64], raw[16], b[40];
     int fd, i, n;
     if (cap < 33) return -1;
@@ -634,9 +692,8 @@ int usb0_mounted(void) {
     FILE *f = fopen("/proc/mounts", "r");
     if (!f) return 0;
     while (fgets(buf, sizeof(buf), f)) {
-        if (strstr(buf, " /storage/usb0 ") || strstr(buf, " /mnt/media_rw/usb0 ") ||
-            strstr(buf, " /storage/usb1 ") || strstr(buf, " /mnt/media_rw/usb1 ") ||
-            strstr(buf, " /storage/usb2 ") || strstr(buf, " /mnt/media_rw/usb2 ")) {
+        /* The HU has one USB port. */
+        if (strstr(buf, " " USB0 " ") || strstr(buf, " " USB0_MNT " ")) {
             fclose(f);
             return 1;
         }

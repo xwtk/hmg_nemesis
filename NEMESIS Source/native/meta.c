@@ -262,6 +262,12 @@ int meta_parse(const ini_file *ini, pkg_meta *m, char *err, size_t ecap) {
     if (set_field(m->os, sizeof(m->os), ini_get(ini, "nemesis", "os"), "os", err, ecap)) return -1;
     if (set_field(m->models, sizeof(m->models), ini_get(ini, "nemesis", "models"), "models", err, ecap))
         return -1;
+    v = ini_get(ini, "nemesis", "favicon");
+    if (v && *v && (v[0] == '/' || strstr(v, "..") || strchr(v, '\\'))) {
+        snprintf(err, ecap, "favicon must be a path inside the package: %s", v);
+        return -1;
+    }
+    if (set_field(m->favicon, sizeof(m->favicon), v, "favicon", err, ecap)) return -1;
     return 0;
 }
 
@@ -291,6 +297,12 @@ int meta_deps_unmet(const pkg_meta *m, meta_lookup_fn lookup, char *reasons, siz
     return unmet;
 }
 
+/* Written for a newer NEMESIS: its fields may mean things this binary cannot do.
+ * A core update is exempt, since installing it is the way to read them. */
+int meta_too_new(const pkg_meta *m) {
+    return strcmp(m->id, CORE_ID) && ver_cmp(m->meta_ver, META_VERSION) > 0;
+}
+
 /* The verdict is about this head unit only. Unmet dependencies stay listed as
  * reasons, and install refuses them on their own (exit 22). */
 int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
@@ -303,6 +315,10 @@ int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
     model_ok = meta_list_match(m->models, model);
     if (!model_ok)
         reason_add(reasons, cap, "model %s not in %s%s\n", model && *model ? model : "unknown", m->models, NULL);
+    if (meta_too_new(m)) {
+        reason_add(reasons, cap, "Package \"%s\" requires newer version of NEMESIS.%s%s\n", m->name, NULL, NULL);
+        return COMPAT_NONE;
+    }
     if (os_ok) return COMPAT_FULL;
     if (model_ok) return COMPAT_PARTIAL;
     return COMPAT_NONE;

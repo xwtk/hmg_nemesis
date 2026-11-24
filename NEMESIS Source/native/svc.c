@@ -181,6 +181,8 @@ int svc_start_ex(const char *qname, int manual) {
         open("/dev/null", O_RDONLY);
         setenv("PATH", NEMESIS_PATH, 1);
         setenv("LD_LIBRARY_PATH", "/vendor/lib:/system/lib", 1);
+        /* A service started by an install is not part of that job. */
+        unsetenv("NEMESIS_JOB");
         if (uid) {
             setgid(gid);
             setuid(uid);
@@ -373,6 +375,8 @@ static void android_up_tick(void) {
     if (!since) since = ts.tv_sec;
     if (ts.tv_sec - since < ANDROID_UP_SEC) return;
     done = 1;
+    lp_boot_ok();
+    queue_scan_boot(); /* boot-apply ran after the watchdog started: its damaged list becomes repair jobs */
     read_boot_id(id, sizeof(id));
     seen[0] = 0;
     f = fopen(ANDROID_UP_MARK, "r");
@@ -423,12 +427,15 @@ int cmd_watchdog(void) {
     write_pidfile(WD_PIDFILE, getpid());
     if (lk >= 0) close(lk);
     seed_core_packages();
+    host_state_boot_apply();
+    queue_scan_boot();
     {
         int su_fds[2];
         int su_n = su_listen(su_fds);
         log_msg("watchdog start pid=%d su_socks=%d", (int)getpid(), su_n);
         daemon_ready();
         remount_system(1);
+        lp_wrapper_install();
         for (;;) {
             reap_children();
             if (!pidfile_is(SM_PIDFILE, "svcmgr")) {

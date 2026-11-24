@@ -15,6 +15,8 @@ public class SettingsActivity extends Activity {
     /** Host-state checks loaded from native in the background so the Settings list opens at once. */
     private volatile boolean otaBlocked;
     private volatile boolean selinuxOff;
+    /** Only show the SELinux toggle when the unit actually boots enforcing. */
+    private volatile boolean selinuxShow;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,11 +47,13 @@ public class SettingsActivity extends Activity {
                 final boolean ota = "on".equals(Cli.run("ota-block", "status").trim());
                 String se = Cli.run("selinux", "status").trim();
                 final boolean se_off = "permissive".equals(se) || "disabled".equals(se);
+                final boolean se_show = "enforcing".equals(Cli.run("selinux", "cmdline").trim());
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (isFinishing()) return;
                         otaBlocked = ota;
                         selinuxOff = se_off;
+                        selinuxShow = se_show;
                         bindList();
                     }
                 });
@@ -70,8 +74,10 @@ public class SettingsActivity extends Activity {
                     getString(R.string.use_telematics_sum), "telematics", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.block_ota),
                     getString(R.string.block_ota_sum), "ota", false));
-            rows.add(new TwoLineAdapter.Row(getString(R.string.disable_selinux),
-                    getString(R.string.disable_selinux_sum), "selinux", false));
+            if (selinuxShow) {
+                rows.add(new TwoLineAdapter.Row(getString(R.string.disable_selinux),
+                        getString(R.string.disable_selinux_sum), "selinux", false));
+            }
             rows.add(new TwoLineAdapter.Row(getString(R.string.check_updates),
                     getString(R.string.title) + " " + Ui.versionName(this), "update", false));
             rows.add(new TwoLineAdapter.Row(getString(R.string.reboot),

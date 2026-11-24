@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.io.File;
@@ -17,7 +18,6 @@ import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DialogActivity extends Activity {
     private String mode;
@@ -26,14 +26,38 @@ public class DialogActivity extends Activity {
     private boolean usb;
     private boolean progressing;
     private boolean confirm;
+    /** Longest status line that fits on one line of the 640dp/26sp message view. */
+    private static final int STATUS_MAX = 40;
+    /** While true, poll the hooks' live status/progress files written to sessionDir. */
+    private boolean tracking;
+    private String progressBase = "";
+    private android.os.Handler uiPoll;
+    private final Runnable pollTask = new Runnable() {
+        public void run() {
+            if (!tracking || isFinishing()) return;
+            renderJobUi();
+            if (uiPoll != null) uiPoll.postDelayed(this, 400);
+        }
+    };
     /** Set when this popup runs the job itself rather than answering the USB handler. */
     private String localPath;
     private String targetName;
     /** Steps of a Store job waiting for the user's yes. */
     private List<StoreList.Entry> pending;
     private boolean storeRisk;
-    /** Set while a download can be cancelled. Whoever flips it first decides. */
-    private volatile AtomicBoolean downloadCancel;
+    private static final int COUNTDOWN_SEC = 15;
+    private int countdown;
+    private final Runnable tick = new Runnable() {
+        public void run() {
+            if (!"reboot_countdown".equals(mode) || !confirm || isFinishing()) return;
+            if (--countdown <= 0) {
+                onYes();
+                return;
+            }
+            showCountdown();
+            uiPoll.postDelayed(this, 1000);
+        }
+    };
     /** Background checks stay quiet while this popup is on screen. */
     static volatile boolean visible;
 
@@ -77,6 +101,15 @@ public class DialogActivity extends Activity {
         visible = false;
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (uiPoll != null) {
+            uiPoll.removeCallbacks(pollTask);
+            uiPoll.removeCallbacks(tick);
+        }
+    }
+
     /** Dimmed full window with a centered card. A floating dialog window is
      *  drawn by this head unit as a panel that rises from the bottom. */
     private void sizeAsPopup() {
@@ -107,7 +140,7 @@ public class DialogActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // A popup is already up, and may be mid-job: the Updates page still shows the count.
+        // A popup is already up, and may be mid-job: Package Manager still shows the count.
         if ("pkg_updates".equals(intent.getStringExtra("nemesis_mode"))) return;
         setIntent(intent);
         bind(intent);
@@ -115,10 +148,6 @@ public class DialogActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (downloadCancel != null) {
-            cancelDownload();
-            return;
-        }
         if (progressing) return;
         if (confirm) writeReply("no");
         else writeReply("ok");
@@ -146,6 +175,7 @@ public class DialogActivity extends Activity {
         if (msg == null || yes == null || no == null) return;
         progressing = false;
         confirm = false;
+        stopTracking();
         showChrome(true);
         if ("progress".equals(mode)) {
             showProgress(custom != null ? custom : getString(R.string.working));
@@ -226,7 +256,23 @@ public class DialogActivity extends Activity {
             msg.setText("Package \"" + n + "\" is already installed. Do you wish to update it?");
             confirm = true;
         } else if ("confirm_reboot".equals(mode)) {
-            msg.setText(R.string.reboot_q);
+            // Downloads alone are not interrupted by a restart: they start again after it.
+            msg.setText(Queue.count(Queue.list(), true) > 0 ? R.string.reboot_busy : R.string.reboot_q);
+            confirm = true;
+        } else if ("reboot_countdown".equals(mode)) {
+            confirm = true;
+            countdown = COUNTDOWN_SEC;
+            showCountdown();
+            if (uiPoll == null) uiPoll = new android.os.Handler();
+            uiPoll.removeCallbacks(tick);
+            uiPoll.postDelayed(tick, 1000);
+        } else if ("confirm_resume".equals(mode)) {
+            boolean unclean = false;
+            List<Queue.Job> jobs = Queue.list();
+            for (int k = 0; k < jobs.size(); k++) {
+                if ("interrupted".equals(jobs.get(k).state) && jobs.get(k).unclean) unclean = true;
+            }
+            msg.setText(unclean ? R.string.confirm_resume_unclean : R.string.confirm_resume);
             confirm = true;
         } else if ("wipe".equals(mode)) {
             msg.setText(R.string.wipe_q);
@@ -261,13 +307,19 @@ public class DialogActivity extends Activity {
             msg.setText(R.string.forbidden);
         } else if ("result_ok".equals(mode)) {
             msg.setText(custom != null ? custom : getString(R.string.result_ok));
+            clearUiFiles();
         } else {
-            msg.setText(custom != null ? custom : getString(R.string.result_fail));
+            String base = custom != null ? custom : getString(R.string.result_fail);
+            String err = readUiFile("ui.error");
+            msg.setText(err != null && err.length() > 0 ? base + "\n" + err : base);
+            clearUiFiles();
         }
         if (confirm) {
             boolean updates = "pkg_updates".equals(mode);
-            yes.setText(updates ? R.string.view : R.string.yes);
-            no.setText(updates ? R.string.not_now : R.string.no);
+            boolean count = "reboot_countdown".equals(mode);
+            if (count) yes.setText(swap() ? R.string.swap_now : R.string.reboot_now);
+            else yes.setText(updates ? R.string.view : R.string.yes);
+            no.setText(updates || count ? R.string.not_now : R.string.no);
             yes.setVisibility(View.VISIBLE);
             yes.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -293,10 +345,32 @@ public class DialogActivity extends Activity {
         wireClose();
     }
 
+    private void showCountdown() {
+        TextView msg = (TextView) findViewById(R.id.message);
+        if (msg == null) return;
+        String app = getIntent().getStringExtra("nemesis_name");
+        msg.setText(getString(swap() ? R.string.swap_countdown : R.string.reboot_countdown)
+                .replace("%s", app != null ? app : "apps").replace("%d", String.valueOf(countdown)));
+    }
+
+    /** A LivePatch swap: only the patched apps restart, not the head unit. */
+    private boolean swap() {
+        return "1".equals(getIntent().getStringExtra("nemesis_swap"));
+    }
+
+    /** Opens Package Manager on `id`'s row; installs show their progress there. */
+    static void openPm(Context c, String id) {
+        Intent i = new Intent(c, PackageManagerActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (id != null) i.putExtra("focus_id", id);
+        c.startActivity(i);
+    }
+
     private void runReboot() {
         new Thread(new Runnable() {
             public void run() {
-                if (Cli.runRc("root", "-c", "sync; /system/bin/reboot") == 0) return;
+                // nemesis reboot syncs, and outside a job it is a real reboot.
+                if (Cli.runRc("reboot") == 0) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (isFinishing()) return;
@@ -310,6 +384,25 @@ public class DialogActivity extends Activity {
     }
 
     private void onYes() {
+        if ("reboot_countdown".equals(mode)) {
+            // nemesis is waiting on the reply and does the reboot.
+            writeReply("yes");
+            // A swap restarts only the patched apps; nothing would end the progress view.
+            if (swap()) Ui.close(this);
+            else showProgress(getString(R.string.rebooting));
+            return;
+        }
+        if ("confirm_resume".equals(mode)) {
+            new Thread(new Runnable() {
+                public void run() {
+                    Cli.exec("queue", "resume", "all");
+                }
+            }).start();
+            Downloads.resumeAll(this);
+            openPm(this, null);
+            Ui.close(this);
+            return;
+        }
         if ("confirm_reboot".equals(mode)) {
             showProgress(getString(R.string.rebooting));
             runReboot();
@@ -327,7 +420,7 @@ public class DialogActivity extends Activity {
             return;
         }
         if ("confirm_uninstall".equals(mode)) {
-            showProgress(getString(R.string.uninstalling));
+            showProgress(getString(R.string.working));
             runUninstall();
             return;
         }
@@ -337,19 +430,17 @@ public class DialogActivity extends Activity {
             return;
         }
         if ("confirm_online_update".equals(mode) || (localPath != null && "confirm_update".equals(mode))) {
-            showProgress(getString(R.string.updating));
+            showJobProgress(getString(R.string.updating));
             runUpdate(localPath, false);
             return;
         }
         if ("confirm_update_risk".equals(mode)) {
-            showProgress(getString(R.string.updating));
+            showJobProgress(getString(R.string.updating));
             runUpdate(localPath, true);
             return;
         }
         if ("pkg_updates".equals(mode)) {
-            Intent i = new Intent(this, UpdatesActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
+            openPm(this, null);
             Ui.close(this);
             return;
         }
@@ -394,12 +485,14 @@ public class DialogActivity extends Activity {
             return;
         }
         writeReply("yes");
-        if ("confirm_install".equals(mode) || "confirm_risk".equals(mode)) {
-            showProgress(getString(R.string.installing));
+        // A stick's package goes to the queue; the handler opens Package Manager on it.
+        if ("confirm_install".equals(mode) || "confirm_reinstall".equals(mode) || "update".equals(mode)) {
+            Ui.close(this);
             return;
         }
-        if ("update".equals(mode) || "confirm_update".equals(mode) || "confirm_reinstall".equals(mode)) {
-            showProgress(getString(R.string.updating));
+        // What is left from the stick is a NEMESIS update, which the handler runs.
+        if ("confirm_risk".equals(mode) || "confirm_update".equals(mode)) {
+            showJobProgress(getString(R.string.updating));
             return;
         }
         if ("confirm_open".equals(mode)) {
@@ -595,133 +688,30 @@ public class DialogActivity extends Activity {
         return dependents == null ? null : named(R.string.update_blocked, name, dependents);
     }
 
-    /** Dependencies first, the package last. Runs each step in order and stops at a failure. */
-    private void runJob(final List<StoreList.Entry> queue) {
-        showProgress(getString(R.string.working));
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    sweepCache();
-                    for (int k = 0; k < queue.size(); k++) {
-                        if (!runStep(queue.get(k), k == queue.size() - 1)) return;
-                    }
-                    goOnUi("result_ok", null, null, null);
-                } catch (Throwable t) {
-                    CrashLog.note("update.log", "store job: " + t);
-                    goOnUi("result_fail", null, null, null);
-                }
-            }
-        }).start();
-    }
-
-    /** A power cut mid-download leaves a zip nothing else would remove. */
-    private void sweepCache() {
-        File[] files = getCacheDir().listFiles();
-        for (int k = 0; files != null && k < files.length; k++) {
-            if (files[k].getName().startsWith("store-package")) files[k].delete();
-        }
-    }
-
-    private boolean runStep(StoreList.Entry e, boolean last) {
-        String path = e.localZip;
-        File cached = null;
-        if (path.length() == 0) {
-            AtomicBoolean cancel = new AtomicBoolean();
-            downloadCancel = cancel;
-            progressOnUi(getString(R.string.downloading_named).replace("%s", e.name), true);
-            try {
-                cached = Portal.download(this, e.url, e.sha256, "store-package-" + System.nanoTime() + ".zip", cancel);
-            } catch (Portal.Cancelled c) {
-                return false;
-            } catch (Throwable t) {
-                CrashLog.note("update.log", "store download failed: " + t);
-                downloadCancel = null;
-                goOnUi("result_fail", getString(R.string.download_fail), null, null);
-                return false;
-            }
-            if (!cancel.compareAndSet(false, true)) {
-                if (cached != null) cached.delete();
-                return false;
-            }
-            downloadCancel = null;
-            if (cached == null) {
-                goOnUi("result_fail", getString(R.string.download_bad), null, null);
-                return false;
-            }
-            path = cached.getPath();
-        }
-        progressOnUi(getString(R.string.installing_named).replace("%s", e.name), false);
-        List<String> args = new ArrayList<String>();
-        args.add("install");
-        if (e.isInstalled) args.add("--update");
-        if (last && storeRisk) args.add("--accept-risk");
-        args.add(path);
-        Cli.Result r = Cli.exec(args.toArray(new String[args.size()]));
-        if (cached != null) cached.delete();
-        if (r.rc == 0) return true;
-        CrashLog.note("update.log", "store install " + e.id + " rc=" + r.rc);
-        if (r.rc == 20 && last) {
-            // Its own descriptor says no: asked here, as the Store's listing could not know.
-            goOnUi("confirm_risk", null, null, null);
-            return false;
-        }
-        String why = r.rc == 22 ? named(R.string.deps_unmet, e.name, bullets(DepPlan.unmet(r.out)))
-                : blockedMessage(r.out, e.name);
-        if (why == null) why = getString(R.string.result_fail);
-        goOnUi("result_fail", last ? why : e.name + ": " + why, null, null);
-        return false;
-    }
-
-    private void progressOnUi(final String text, final boolean download) {
-        runOnUiThread(new Runnable() {
-            public void run() {
-                if (isFinishing()) return;
-                if (download) showDownload(text);
-                else showProgress(text);
-            }
-        });
-    }
-
-    private void showDownload(String text) {
-        showProgress(text);
-        View bar = findViewById(R.id.btn_bar);
-        Button yes = (Button) findViewById(R.id.button1);
-        Button no = (Button) findViewById(R.id.button2);
-        if (bar == null || yes == null || no == null) return;
-        bar.setVisibility(View.VISIBLE);
-        yes.setVisibility(View.GONE);
-        no.setText(R.string.cancel);
-        no.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                cancelDownload();
-            }
-        });
-    }
-
-    /** Ignored once the download has finished and its install is about to start. */
-    private void cancelDownload() {
-        AtomicBoolean c = downloadCancel;
-        if (c == null || !c.compareAndSet(false, true)) return;
-        downloadCancel = null;
+    /** Dependencies first, the package last: downloads hand each zip to the queue in that order. */
+    private void runJob(List<StoreList.Entry> queue) {
+        Downloads.start(this, queue, storeRisk);
+        openPm(this, queue.get(queue.size() - 1).id);
         Ui.close(this);
     }
 
+    /** Through the queue, so it waits for any install and its reboot request is held. */
     private void runUninstall() {
         final String id = targetId;
         new Thread(new Runnable() {
             public void run() {
-                final Cli.Result r = id == null ? new Cli.Result(1, "") : Cli.exec("uninstall", id);
+                final Cli.Result r = id == null ? new Cli.Result(1, "") : Cli.exec("queue", "uninstall", id);
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (isFinishing()) return;
+                        if (r.rc == 0) {
+                            openPm(DialogActivity.this, id);
+                            Ui.close(DialogActivity.this);
+                            return;
+                        }
                         Intent i = new Intent(getIntent());
-                        i.putExtra("nemesis_mode", r.rc == 0 ? "result_ok" : "result_fail");
-                        String deps = r.rc == 4 ? namesAfter(r.out, "dependent ") : null;
-                        if (deps != null)
-                            i.putExtra("nemesis_message",
-                                    getString(R.string.uninstall_blocked).replace("%s", deps));
-                        else
-                            i.removeExtra("nemesis_message");
+                        i.putExtra("nemesis_mode", "result_fail");
+                        i.removeExtra("nemesis_message");
                         bind(i);
                     }
                 });
@@ -859,9 +849,112 @@ public class DialogActivity extends Activity {
     private void showProgress(String text) {
         progressing = true;
         confirm = false;
+        stopTracking();
         TextView msg = (TextView) findViewById(R.id.message);
         if (msg != null) msg.setText(text);
         showChrome(false);
+    }
+
+    /** A long-running install/uninstall/update: show the base line and poll the
+     *  hooks' live status and progress until the next bind replaces this view. */
+    private void showJobProgress(String base) {
+        progressBase = base != null ? base : "";
+        // Drop any leftovers from a previous job so stale status never flashes;
+        // the native also clears at job start, this just wins the race.
+        clearUiFiles();
+        showProgress(progressBase);
+        tracking = true;
+        if (uiPoll == null) uiPoll = new android.os.Handler();
+        uiPoll.removeCallbacks(pollTask);
+        uiPoll.post(pollTask);
+    }
+
+    /** Delete the hooks' live UI files so no stale status/error leaks into a later popup. */
+    private void clearUiFiles() {
+        new File(sessionDir, "ui.status").delete();
+        new File(sessionDir, "ui.progress").delete();
+        new File(sessionDir, "ui.error").delete();
+    }
+
+    private void stopTracking() {
+        tracking = false;
+        if (uiPoll != null) uiPoll.removeCallbacks(pollTask);
+        View count = findViewById(R.id.progress_count);
+        View bar = findViewById(R.id.progress_bar);
+        if (count != null) count.setVisibility(View.GONE);
+        if (bar != null) bar.setVisibility(View.GONE);
+    }
+
+    private void renderJobUi() {
+        TextView msg = (TextView) findViewById(R.id.message);
+        if (msg != null) {
+            String status = readUiFile("ui.status");
+            if (status != null && status.length() > 0) {
+                if (status.length() > STATUS_MAX) status = status.substring(0, STATUS_MAX) + "…";
+                msg.setText(progressBase + "\n" + status);
+            } else {
+                msg.setText(progressBase);
+            }
+        }
+        applyProgress(readUiFile("ui.progress"));
+    }
+
+    private void applyProgress(String line) {
+        View countV = findViewById(R.id.progress_count);
+        ProgressBar bar = (ProgressBar) findViewById(R.id.progress_bar);
+        if (countV == null || bar == null) return;
+        String[] t = line == null ? null : line.split("\\s+");
+        if (t == null || t.length < 3) {
+            countV.setVisibility(View.GONE);
+            bar.setVisibility(View.GONE);
+            return;
+        }
+        int type, max, cur;
+        try {
+            type = Integer.parseInt(t[0]);
+            max = Integer.parseInt(t[1]);
+            cur = Integer.parseInt(t[2]);
+        } catch (NumberFormatException e) {
+            countV.setVisibility(View.GONE);
+            bar.setVisibility(View.GONE);
+            return;
+        }
+        int pct;
+        String label;
+        if (type == 0) {
+            pct = cur < 0 ? 0 : cur > 100 ? 100 : cur;
+            label = pct + "%";
+        } else {
+            if (max <= 0) max = 1;
+            if (cur < 0) cur = 0;
+            if (cur > max) cur = max;
+            pct = (int) (cur * 100L / max);
+            label = cur + "/" + max;
+        }
+        ((TextView) countV).setText(label);
+        bar.setProgress(pct);
+        countV.setVisibility(View.VISIBLE);
+        bar.setVisibility(View.VISIBLE);
+    }
+
+    /** First line of a hook UI file in sessionDir, or null. */
+    private String readUiFile(String name) {
+        try {
+            java.io.FileInputStream in = new java.io.FileInputStream(new File(sessionDir, name));
+            try {
+                byte[] buf = new byte[1024];
+                int n = in.read(buf);
+                if (n <= 0) return null;
+                String s = new String(buf, 0, n, "UTF-8");
+                int nl = s.indexOf('\n');
+                if (nl >= 0) s = s.substring(0, nl);
+                return s.trim();
+            } finally {
+                in.close();
+            }
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private void showChrome(boolean show) {
@@ -893,7 +986,8 @@ public class DialogActivity extends Activity {
         dir.setWritable(true, false);
         dir.setExecutable(true, false);
         writeOne(new File(dir, "reply"), value);
-        writeOne(new File("/data/nemesis/usb-session/reply"), value);
+        // The countdown has its own session; the USB handler must not read its answer.
+        if (!"reboot_countdown".equals(mode)) writeOne(new File("/data/nemesis/usb-session/reply"), value);
     }
 
     private void writeOne(File f, String value) {

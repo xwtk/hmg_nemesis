@@ -128,7 +128,10 @@ public class PackageActivity extends Activity {
             if ("1".equals(p[2])) continue;
             String name = p[1].length() > 0 ? p[1] : p[0];
             String desc = p.length > 5 ? unescape(p[5]) : "";
-            list.add(new TwoLineAdapter.Row(name, desc, p[0], false));
+            TwoLineAdapter.Row row = new TwoLineAdapter.Row(name, desc, p[0], false);
+            row.icon = p.length > 6 ? unescape(p[6]) : "";
+            Icons.remember(p[0], row.icon);
+            list.add(row);
         }
         // No rows at all is an error from the CLI, not an empty unit: show it.
         if (parsed == 0 && out.trim().length() > 0) {

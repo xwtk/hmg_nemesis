@@ -1,47 +1,18 @@
 #!/system/bin/sh
-export PATH=/data/nemesis/bin:/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
-. ./scripts/common.sh
-
-log "preinstall enhanced.projection"
-# Each of these replaced the same files; its backup holds the stock bytes.
-for _old in carplay.session projection.tbt; do
+# Early refusal; LivePatch itself checks every app build and library when it builds the outputs.
+for _old in carplay.session projection.tbt enhanced.projection enhanced.projection.universal; do
     if [ -d "/data/nemesis/backup/$_old" ]; then
-        log "FAIL: uninstall $_old first"
+        echo "uninstall $_old first (it edits /system directly)"
         exit 1
     fi
 done
-if [ ! -x /system/xbin/nemesis ]; then
-    log "FAIL: /system/xbin/nemesis missing"
-    exit 1
-fi
-if [ ! -f "$BP" ]; then
-    log "FAIL: $BP missing"
-    exit 1
-fi
-for _n in $ALL_APPS; do
-    if [ ! -s "files/patched/${_n}.apk" ]; then
-        log "FAIL: missing files/patched/${_n}.apk"
-        exit 1
-    fi
-    if [ ! -s "files/expect/${_n}.odex.md5" ]; then
-        log "FAIL: missing files/expect/${_n}.odex.md5"
-        exit 1
-    fi
-    classify_app "$_n" && _st=0 || _st=$?
-    if [ "$_st" -eq 1 ]; then
-        exit 1
-    fi
+for _a in HKMC_DiPO Iap2ServerApp Bluetooth PhoneProjection HKMC_GPM HKMC_Navi_ExSL; do
+    # every build is ported on the unit by LivePatch; only a missing or non-odex target is refused here
+    ./bin/livepatch dexsig /system/app/$_a.odex >/dev/null 2>&1 || { echo "$_a.odex missing or not an odex"; exit 1; }
 done
-if [ ! -s "$CONV_PAYLOAD" ]; then
-    log "FAIL: missing $CONV_PAYLOAD"
-    exit 1
-fi
-classify_receiver && _st=0 || _st=$?
-if [ "$_st" -eq 1 ]; then
-    exit 1
-fi
-lib_pattern "$CORE_LIB" core || exit 1
-lib_pattern "$AUDIO_LIB" audio || exit 1
-lib_pattern "$UTILS_LIB" utils || exit 1
-log "preinstall ok"
+for _l in core:CarPlayCore audio:CarPlayAudio utils:CarPlayUtils recv:autoreceiver_infobank; do
+    ./bin/livepatch check /system/lib/lib${_l#*:}.so ${_l%%:*} >/dev/null 2>&1
+    _rc=$?
+    [ "$_rc" -eq 0 ] || [ "$_rc" -eq 10 ] || { echo "lib${_l#*:}.so does not match the ${_l%%:*} pattern ($_rc)"; exit 1; }
+done
 exit 0

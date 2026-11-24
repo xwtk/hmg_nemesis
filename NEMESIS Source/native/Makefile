@@ -6,7 +6,7 @@ STRIP := $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/arm-linux-androideabi-
 CFLAGS := -O2 -fPIE -pie -Wall -Wextra -D_FILE_OFFSET_BITS=64
 LDFLAGS := -lz -pie
 
-SRC := main.c util.c ini.c meta.c update.c zip.c pkg.c svc.c usb.c su.c host.c
+SRC := main.c util.c ini.c meta.c update.c zip.c pkg.c svc.c usb.c su.c host.c queue.c livepatch.c prop.c
 OBJ := $(SRC:.c=.o)
 OUT := nemesis
 

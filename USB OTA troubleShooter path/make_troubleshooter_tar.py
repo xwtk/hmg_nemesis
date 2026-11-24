@@ -34,10 +34,19 @@ APK_PATH = SOURCE_ROOT / "manager" / "NEMESIS.apk"
 RECOVERY_PATH = SOURCE_ROOT / "boot" / "install-recovery.sh"
 QB_HOOK_PATH = SOURCE_ROOT / "boot" / "qb_hook.sh"
 CACERTS_DIR = SOURCE_ROOT / "boot" / "cacerts"
+PORTER_PATH = SOURCE_ROOT / "out" / "porter.jar"  # LivePatch dex engine (make porter)
 
 
 def bootstrap_script(elf_skip: int, elf_len: int, apk_skip: int, apk_len: int,
-                     recovery: str, qb_hook: str, cacerts: str) -> str:
+                     recovery: str, qb_hook: str, cacerts: str,
+                     por_skip: int = 0, por_len: int = 0, por_out: str = "") -> str:
+    porter = ""
+    if por_len:
+        porter = f"""mkdir -p /data/nemesis/livepatch/engine
+extract_blob /data/nemesis/livepatch/engine/porter.jar {por_skip} {por_len}
+chmod 644 /data/nemesis/livepatch/engine/porter.jar
+echo {por_out} > /data/nemesis/livepatch/engine/porter.out
+"""
     return f"""#!/system/bin/sh
 # execl'd from /storage/upgrade/troubleShooter during OTA MAP_PREPARE (before ota_info check).
 export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
@@ -101,7 +110,7 @@ chmod 4755 /system/xbin/nemesis
 
 extract_blob /system/app/NEMESIS.apk "$APK_SKIP" "$APK_LEN"
 chmod 644 /system/app/NEMESIS.apk
-rm -f /data/dalvik-cache/system@app@NEMESIS.apk@classes.dex \\
+{porter}rm -f /data/dalvik-cache/system@app@NEMESIS.apk@classes.dex \\
       /cache/dalvik-cache/system@app@NEMESIS.apk@classes.dex \\
       /data/dalvik-cache/arm/system@app@NEMESIS.apk@classes.dex
 
@@ -162,13 +171,18 @@ def main() -> None:
     cacerts = cacerts_heredocs(CACERTS_DIR)
     elf = ELF_PATH.read_bytes()
     apk = APK_PATH.read_bytes()
+    por = PORTER_PATH.read_bytes() if PORTER_PATH.is_file() else b""
+    por_out = PORTER_PATH.with_name("porter.out").read_text().strip() if por else ""
+    if por and not por_out.isdigit():
+        raise SystemExit("out/porter.out must hold the porter output version number")
 
     align = 4096
     elf_skip = 0
     hdr = b""
     for _ in range(8):
         apk_skip = elf_skip + len(elf)
-        script = bootstrap_script(elf_skip, len(elf), apk_skip, len(apk), recovery, qb_hook, cacerts)
+        script = bootstrap_script(elf_skip, len(elf), apk_skip, len(apk), recovery, qb_hook, cacerts,
+                                  apk_skip + len(apk), len(por), por_out)
         hdr = script.encode("utf-8")
         if not hdr.endswith(b"\n"):
             hdr += b"\n"
@@ -180,7 +194,7 @@ def main() -> None:
     else:
         raise SystemExit("bootstrap header length did not stabilize")
 
-    data = hdr + elf + apk
+    data = hdr + elf + apk + por
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(OUT, "w", format=tarfile.GNU_FORMAT) as tar:
         reg = tarfile.TarInfo(name=MEMBER)
@@ -195,7 +209,7 @@ def main() -> None:
 
     print(f"Wrote {OUT} ({OUT.stat().st_size} bytes) -> /storage/upgrade/{MEMBER}")
     print(f"  also {alias}")
-    print(f"  header {len(hdr)}  elf {len(elf)}  apk {len(apk)}")
+    print(f"  header {len(hdr)}  elf {len(elf)}  apk {len(apk)}  porter {len(por)}")
     print("  install: /system/xbin/nemesis (04755), NEMESIS.apk, watchdog hook, root CAs (no stock APK patch)")
     print()
     print("Flash: ota_package_troubleshooter.tar (or ota_package.tar) -> DSP OTA")

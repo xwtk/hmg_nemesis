@@ -128,6 +128,16 @@ void md5_file_hex(const char *path, char out[33]) {
     for (i = 0; i < 16; i++) snprintf(out + i * 2, 3, "%02x", dig[i]);
 }
 
+void md5_str_hex(const char *s, char out[33]) {
+    unsigned char dig[16];
+    md5_ctx c;
+    int i;
+    md5_init(&c);
+    md5_update(&c, (const unsigned char *)s, strlen(s));
+    md5_final(&c, dig);
+    for (i = 0; i < 16; i++) snprintf(out + i * 2, 3, "%02x", dig[i]);
+}
+
 /* ---- MD5SUMS ---- */
 
 static int rel_path_ok(const char *rel) {
@@ -360,6 +370,9 @@ static const core_file CORE_FILES[] = {
     {"core/nemesis", BIN_PATH, 04755, "nemesis"},
     {"core/NEMESIS.apk", MANAGER_APK, 0644, "NEMESIS.apk"},
     {"core/install-recovery.sh", INSTALL_RECOVERY, 0755, "install-recovery.sh"},
+    /* LivePatch dex engine: on /data, but versioned with NEMESIS. */
+    {"core/porter.jar", NEMESIS_ROOT "/livepatch/engine/porter.jar", 0644, "porter.jar"},
+    {"core/porter.out", NEMESIS_ROOT "/livepatch/engine/porter.out", 0644, "porter.out"},
 };
 #define N_CORE (int)(sizeof(CORE_FILES) / sizeof(CORE_FILES[0]))
 
@@ -524,6 +537,8 @@ int cmd_update(int argc, char **argv) {
         return 1;
     }
     ensure_dirs();
+    /* Waits for queued installs; the core installs below run inside this job. */
+    job_guard("update");
     if (load_zip_meta(zip, &ini, &m) != 0) return 1;
     ini_free(&ini);
     if (strcmp(m.id, CORE_ID) || !has_type(m.types, "update")) {
@@ -624,6 +639,7 @@ int cmd_update(int argc, char **argv) {
         return 10;
     }
     added_ca[0] = 0;
+    mkdir_p(NEMESIS_ROOT "/livepatch/engine", 0755);
     for (i = 0; i < N_CORE; i++) {
         snprintf(p, sizeof(p), "%s/%s", root, CORE_FILES[i].rel);
         if (!is_file(p)) continue;
@@ -669,7 +685,8 @@ int cmd_update(int argc, char **argv) {
     sync();
     if (reboot) {
         sleep(1);
-        run_cmd("/system/bin/reboot");
+        reboot_req_clear();
+        real_reboot("reboot");
     } else {
         restart_watchdog();
     }

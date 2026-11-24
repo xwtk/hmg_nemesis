@@ -145,6 +145,8 @@ nemesis root [uid] [-c command]
 nemesis remount [rw|ro]
 nemesis service start|status|stop|list <package-id>/<name>
 nemesis log dump|logcat|dmesg|service <package-id>/<name>
+nemesis livepatch status|safe on|off|repair <id>|discard <id>|selftest
+nemesis prop get <key> | set <key> <value> | del <key>
 nemesis wipe --confirm [--no-reboot]
 nemesis version
 nemesis watchdog | svcmgr | usb-handler | ping

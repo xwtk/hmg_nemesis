@@ -36,6 +36,7 @@ def main() -> None:
     ap.add_argument("--qb-hook", type=Path, default=ROOT / "boot" / "qb_hook.sh")
     ap.add_argument("--no-qb-hook", action="store_true",
                     help="leave the hook as installed: 1.16 and 1.16.1 cannot rewrite it on real units")
+    ap.add_argument("--porter", type=Path, default=ROOT / "out" / "porter.jar")
     ap.add_argument("--cacerts", type=Path, default=ROOT / "boot" / "cacerts")
     ap.add_argument("--core-package", type=Path, action="append", default=[])
     ap.add_argument("--migrate", type=Path, default=None)
@@ -63,6 +64,10 @@ def main() -> None:
         files["core/NEMESIS.apk"] = args.apk.read_bytes()
     if args.recovery.is_file():
         files["core/install-recovery.sh"] = args.recovery.read_bytes()
+    # The dex engine and its output version travel together (livepatch/engine/).
+    if args.porter.is_file():
+        files["core/porter.jar"] = args.porter.read_bytes()
+        files["core/porter.out"] = args.porter.with_name("porter.out").read_bytes()
     if not args.no_qb_hook and args.qb_hook.is_file():
         hook = args.qb_hook.read_bytes()
         if b"NEMESIS_QB_HOOK" not in hook:
@@ -79,7 +84,7 @@ def main() -> None:
 
     meta = (
         "[nemesis]\n"
-        "version=1.1\n"
+        "version=1.2\n"
         "id=nemesis.core\n"
         "name=NEMESIS\n"
         "type=update\n"
@@ -105,7 +110,7 @@ def main() -> None:
     print(f"Wrote {args.output} ({len(buf.getvalue())} bytes, version {ver}, {len(files)} files)")
     # The USB reader finds the zip through path= in the NEMESIS.data beside it.
     stick = args.output.with_name("NEMESIS.data")
-    stick.write_text(f"[nemesis]\nversion=1.1\ntype=update\npath={args.output.name}\n")
+    stick.write_text(f"[nemesis]\nversion=1.2\ntype=update\npath={args.output.name}\n")
     print(f"Wrote {stick} (stick-root NEMESIS.data, path={args.output.name})")
 
 

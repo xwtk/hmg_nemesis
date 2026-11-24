@@ -15,6 +15,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
     private static final int ACT_STORE = 0;
@@ -37,7 +38,7 @@ public class MainActivity extends Activity {
     };
     private static final String FLAG_PREFS = "flags";
     private static final String KEY_OTA_ASKED = "ota_asked_version";
-    private static final String KEY_WIFI_WARNED = "wifi_warned";
+    private static final String KEY_WIFI_WARNED = "wifi_warned_boot";
     private static final int TILE_CHARS = 26;
     private static final int COLS = 4;
     private static final int ROWS = 2;
@@ -57,6 +58,13 @@ public class MainActivity extends Activity {
     /** The plain list that stands in for the two columns if the layout fails. */
     private boolean fallback;
     private boolean resumed;
+    private final Runnable statusPoll = new Runnable() {
+        public void run() {
+            if (!resumed) return;
+            showStatus();
+            handler.postDelayed(this, 1000);
+        }
+    };
     private final Runnable refront = new Runnable() {
         public void run() {
             // A pause that ended in onResume was our own onNewIntent.
@@ -93,11 +101,14 @@ public class MainActivity extends Activity {
         if (fallback) return;
         reloadPackages();
         reloadApps();
+        handler.removeCallbacks(statusPoll);
+        handler.post(statusPoll);
     }
 
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(refront);
+        handler.removeCallbacks(statusPoll);
         super.onDestroy();
     }
 
@@ -147,6 +158,11 @@ public class MainActivity extends Activity {
     private void bindPackages() {
         ListView lv = (ListView) findViewById(R.id.list);
         lv.setEmptyView(findViewById(R.id.empty));
+        findViewById(R.id.pm_status).setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                DialogActivity.openPm(MainActivity.this, null);
+            }
+        });
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
                 if (pos < 0 || pos >= packages.size()) return;
@@ -157,6 +173,29 @@ public class MainActivity extends Activity {
                 startActivity(i);
             }
         });
+    }
+
+    /** My Packages is Package Manager lite: updates, in progress and interrupted counts. */
+    private void showStatus() {
+        List<Queue.Job> jobs = Queue.list();
+        int active = Queue.count(jobs, true);
+        int stopped = Queue.count(jobs, false);
+        List<Downloads.Item> dl = Downloads.items(this);
+        for (int i = 0; i < dl.size(); i++) {
+            Downloads.Item it = dl.get(i);
+            if (it.state != Downloads.DL) stopped++;
+            else if (!it.done) active++;
+        }
+        badge(R.id.pm_updates, PkgUpdates.lastCount);
+        badge(R.id.pm_progress, active);
+        badge(R.id.pm_interrupted, stopped);
+    }
+
+    private void badge(int id, int n) {
+        TextView t = (TextView) findViewById(id);
+        if (t == null) return;
+        t.setText(String.valueOf(n));
+        t.setVisibility(n > 0 ? View.VISIBLE : View.GONE);
     }
 
     private void reloadPackages() {
@@ -321,18 +360,37 @@ public class MainActivity extends Activity {
         else if (idx == ACT_WIFI) openWifi();
     }
 
-    /** First press on WiFi while it is off warns that wireless projection needs a reboot afterwards. */
+    /** First press on WiFi while it is off warns that wireless projection needs a reboot afterwards.
+     * Shown once per boot: the warning is keyed on the boot token, not a permanent flag. */
     private void openWifi() {
         android.content.SharedPreferences prefs =
                 getSharedPreferences(FLAG_PREFS, MODE_PRIVATE);
-        if (!prefs.getBoolean(KEY_WIFI_WARNED, false) && wifiOff()) {
-            prefs.edit().putBoolean(KEY_WIFI_WARNED, true).commit();
+        String boot = bootToken();
+        if (wifiOff() && !boot.equals(prefs.getString(KEY_WIFI_WARNED, ""))) {
+            prefs.edit().putString(KEY_WIFI_WARNED, boot).commit();
             Intent i = new Intent(this, DialogActivity.class);
             i.putExtra("nemesis_mode", "wifi_warn");
             startActivity(i);
             return;
         }
         openComponent(WIFI_SETTINGS);
+    }
+
+    /** A value that stays fixed within a boot and changes across reboots: the kernel
+     * boot_id, falling back to the boot wall-clock if that cannot be read. */
+    private String bootToken() {
+        try {
+            java.io.FileInputStream in = new java.io.FileInputStream("/proc/sys/kernel/random/boot_id");
+            try {
+                byte[] buf = new byte[64];
+                int n = in.read(buf);
+                if (n > 0) return new String(buf, 0, n, "UTF-8").trim();
+            } finally {
+                in.close();
+            }
+        } catch (Throwable t) {
+        }
+        return Long.toString(System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime());
     }
 
     private boolean wifiOff() {

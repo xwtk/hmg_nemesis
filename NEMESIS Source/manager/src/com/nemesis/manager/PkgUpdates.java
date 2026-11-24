@@ -14,14 +14,17 @@ final class PkgUpdates {
         boolean onlineFailed;
     }
 
+    /** Updates the last find() saw, for the home screen's badge.
+     *  shortcut: 0 until a check runs in this process, cache to prefs if the badge must survive a restart. */
+    static volatile int lastCount;
+
     private PkgUpdates() {
     }
 
-    /** The stick's rows, resolved. Empty when it has no list. */
+    /** The stick's rows, resolved. Empty when it has no packages. */
     static List<StoreList.Entry> usbRows() {
         Map<String, String> info = Cli.fields(Cli.run("usb-info"));
-        if (!"list".equals(info.get("type"))) return new ArrayList<StoreList.Entry>();
-        List<StoreList.Entry> rows = StoreList.parseList(Cli.run("usb-info", "--list"));
+        List<StoreList.Entry> rows = StoreActivity.usbRows(info);
         for (int i = 0; i < rows.size(); i++) StoreActivity.resolveUsb(rows.get(i), info.get("root"));
         return rows;
     }
@@ -51,6 +54,7 @@ final class PkgUpdates {
             CrashLog.note("update.log", "package updates: " + t);
         }
         f.updates = StoreList.updates(rows);
+        lastCount = f.updates.size();
         return f;
     }
 

@@ -149,6 +149,26 @@ static int selinux_mode(char *out, size_t cap) {
     return 0;
 }
 
+/* What the kernel cmdline asked for: "enforcing" (androidboot.selinux absent or
+ * =enforcing), else the requested value (disabled/permissive). The Manager
+ * hides the SELinux toggle unless this is "enforcing" — on a unit that never
+ * boots enforcing, setenforce is pointless. */
+static void selinux_cmdline(char *out, size_t cap) {
+    char buf[4096], *p;
+    const char *key = "androidboot.selinux=";
+    size_t i;
+    if (!out || !cap) return;
+    snprintf(out, cap, "enforcing");
+    if (read_file("/proc/cmdline", buf, sizeof(buf)) <= 0) return;
+    p = strstr(buf, key);
+    if (!p) return;
+    p += strlen(key);
+    for (i = 0; p[i] && p[i] != ' ' && p[i] != '\n' && p[i] != '\r' && i + 1 < cap; i++)
+        out[i] = p[i];
+    out[i] = 0;
+    if (!out[0]) snprintf(out, cap, "enforcing");
+}
+
 int cmd_selinux(int argc, char **argv) {
     const char *sub = argc > 0 ? argv[0] : "status";
     char mode[32];
@@ -158,6 +178,12 @@ int cmd_selinux(int argc, char **argv) {
         char *p;
         for (p = mode; *p; p++) *p = (char)tolower((unsigned char)*p);
         printf("%s\n", mode);
+        return 0;
+    }
+    if (!strcmp(sub, "cmdline")) {
+        char cm[32];
+        selinux_cmdline(cm, sizeof(cm));
+        printf("%s\n", cm);
         return 0;
     }
     if (!strcmp(sub, "off")) {
@@ -185,7 +211,7 @@ int cmd_selinux(int argc, char **argv) {
         printf("ok\n");
         return 0;
     }
-    fprintf(stderr, "usage: nemesis selinux on|off|status\n");
+    fprintf(stderr, "usage: nemesis selinux on|off|status|cmdline\n");
     return 1;
 }
 
@@ -206,12 +232,23 @@ static void selinux_restore(void) {
 
 /* ---- ADB over USB and TCP ---- */
 
+/* State is read from the live properties, so Engineering Mode or a script that
+ * flips ADB shows up too. The flag files only hold what to restore. */
 static int usb_adb_is_on(void) {
-    return path_exists(ADB_USB_FLAG);
+    char v[128], *t, *save = NULL;
+    if (getprop("persist.sys.usb.config", v, sizeof(v)) < 0) return 0;
+    for (t = strtok_r(v, ",", &save); t; t = strtok_r(NULL, ",", &save))
+        if (!strcmp(t, "adb")) return 1;
+    return 0;
 }
 
 static int tcp_adb_is_on(void) {
-    return path_exists(ADB_TCP_FLAG);
+    char en[16], port[16];
+    getprop("persist.service.adb.tcp.enable", en, sizeof(en));
+    if (!strcmp(en, "1")) return 1;
+    if (!strcmp(en, "0")) return 0;
+    getprop("service.adb.tcp.port", port, sizeof(port));
+    return atoi(port) > 0;
 }
 
 static int adb_usb_on(void) {
@@ -239,8 +276,8 @@ static int adb_usb_off(void) {
         n = read_file(ADB_USB_FLAG, prev, sizeof(prev));
         if (n > 0) trimline(prev);
     }
-    /* Stock on this unit is mtp,adb normally; restore whatever we saved, or mtp as a safe default. */
-    if (!prev[0]) snprintf(prev, sizeof(prev), "mtp");
+    /* Restore what we saved; with no flag (ADB was enabled elsewhere) use Engineering Mode's "off" value. */
+    if (!prev[0]) snprintf(prev, sizeof(prev), "host");
     setprop("persist.sys.usb.config", prev);
     setprop("sys.usb.config", prev);
     unlink(ADB_USB_FLAG);
@@ -259,6 +296,9 @@ static int adb_tcp_on(void) {
         }
     }
     setprop("service.adb.tcp.port", "5555");
+    /* Engineering Mode keeps its own on/off here; "0" would keep the menu showing off. */
+    getprop("persist.service.adb.tcp.enable", prev, sizeof(prev));
+    if (!strcmp(prev, "0")) setprop("persist.service.adb.tcp.enable", "1");
     run_cmd("/system/bin/stop adbd");
     run_cmd("/system/bin/start adbd");
     log_msg("adb tcp on :5555");
@@ -275,6 +315,11 @@ static int adb_tcp_off(void) {
     }
     if (!prev[0]) snprintf(prev, sizeof(prev), "-1");
     setprop("service.adb.tcp.port", prev);
+    {
+        char en[16];
+        getprop("persist.service.adb.tcp.enable", en, sizeof(en));
+        if (!strcmp(en, "1")) setprop("persist.service.adb.tcp.enable", "0");
+    }
     run_cmd("/system/bin/stop adbd");
     run_cmd("/system/bin/start adbd");
     unlink(ADB_TCP_FLAG);
@@ -302,8 +347,8 @@ int cmd_adb(int argc, char **argv) {
 }
 
 static void adb_restore(void) {
-    if (usb_adb_is_on()) adb_usb_off();
-    if (tcp_adb_is_on()) adb_tcp_off();
+    if (path_exists(ADB_USB_FLAG)) adb_usb_off();
+    if (path_exists(ADB_TCP_FLAG)) adb_tcp_off();
 }
 
 /* Called from cmd_wipe just before NEMESIS files are removed. */
@@ -311,4 +356,16 @@ void host_state_restore(void) {
     ota_restore();
     selinux_restore();
     adb_restore();
+}
+
+/* Re-applies toggles the kernel resets each boot. Called from the watchdog so
+ * the user's choice survives a reboot. Only SELinux needs it: ota-block (pm
+ * disable) and adb (persist. props) already persist. The SE_FLAG file is
+ * written whenever the user turns SELinux off (Settings or the popup). */
+void host_state_boot_apply(void) {
+    if (!path_exists(SE_FLAG)) return;
+    if (run_cmd("/system/bin/setenforce 0") == 0)
+        log_msg("boot: re-applied selinux off");
+    else
+        log_msg("boot: setenforce 0 failed");
 }

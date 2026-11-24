@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.16.9"
+#define NEMESIS_VERSION "1.17"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -23,12 +23,14 @@
 #define SERVICES_DB "/data/nemesis/services.db"
 #define PIDS_DIR "/data/nemesis/pids"
 #define SESSION_DIR "/data/nemesis/usb-session"
+/* Live install/uninstall UI, written by hooks via `nemesis ui`, polled by the
+ * Manager popup. In SESSION_DIR because that dir is world-rwx, so the app uid
+ * can read them on both the USB and in-app paths. */
+#define UI_STATUS SESSION_DIR "/ui.status"
+#define UI_PROGRESS SESSION_DIR "/ui.progress"
+#define UI_ERROR SESSION_DIR "/ui.error"
 #define USB0 "/storage/usb0"
 #define USB0_MNT "/mnt/media_rw/usb0"
-#define USB1 "/storage/usb1"
-#define USB1_MNT "/mnt/media_rw/usb1"
-#define USB2 "/storage/usb2"
-#define USB2_MNT "/mnt/media_rw/usb2"
 #define LOCKED_ID "usb-handler"
 #define MONITOR_ID "nemesis.update-monitor"
 /* Holds the boot_id of the boot that already announced Android up. */
@@ -43,6 +45,7 @@
 #define MANAGER_DIALOG "com.nemesis.manager/.DialogActivity"
 #define MANAGER_MAIN "com.nemesis.manager/.MainActivity"
 #define MANAGER_STORE "com.nemesis.manager/.StoreActivity"
+#define MANAGER_PKGMGR "com.nemesis.manager/.PackageManagerActivity"
 #define MANAGER_APK "/system/app/NEMESIS.apk"
 #define CACERTS_DIR "/system/etc/security/cacerts"
 #define OWNED_CACERTS "/data/nemesis/owned-cacerts"
@@ -52,6 +55,9 @@
 #define SM_PIDFILE "/data/nemesis/svcmgr.pid"
 #define SU_SOCK_DEV "/dev/nemesis.sock"
 #define SU_SOCK_DATA "/data/nemesis/root.sock"
+/* Install queue: <seq>.job/.zip/.out/.hook, read directly by the Manager. */
+#define QUEUE_DIR "/data/nemesis/queue"
+#define REBOOT_REQ QUEUE_DIR "/reboot.req"
 
 #define MAX_PATH 512
 #define MAX_LINE 1024
@@ -65,6 +71,8 @@
 #define META_SHORT_MAX 64
 #define META_DETAIL_MAX 256
 #define META_LIST_MAX 1024
+#define META_VERSION "1.2"
+#define FAVICON_MAX (256 * 1024)
 #define COMPAT_FULL 0
 #define COMPAT_PARTIAL 1
 #define COMPAT_NONE 2
@@ -124,6 +132,8 @@ int pidfile_lock(const char *path);
 /* Seconds since pid started, or -1. */
 long proc_age_sec(pid_t pid);
 int usb0_mounted(void);
+/* Per-boot random token, 32 hex chars. */
+int boot_token(char *out, size_t cap);
 int framework_up(void);
 int detach_daemon(void);
 void daemon_ready(void);
@@ -142,6 +152,8 @@ typedef struct {
     char depends[512];
     char os[META_LIST_MAX + 1];
     char models[META_LIST_MAX + 1];
+    /* 1.2: image path under the package root. */
+    char favicon[160];
 } pkg_meta;
 
 /* Fills `ver` with the installed version of `id`; returns 1 when installed. */
@@ -154,6 +166,7 @@ int meta_depends_on(const char *deps, const char *id);
 const char *meta_dep_spec(const char *deps, const char *id, char *spec, size_t cap);
 const char *meta_conflict_spec(const char *deps, const char *id, char *spec, size_t cap);
 int meta_deps_unmet(const pkg_meta *m, meta_lookup_fn lookup, char *reasons, size_t cap);
+int meta_too_new(const pkg_meta *m);
 int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
                 meta_lookup_fn lookup, char *reasons, size_t cap);
 const char *compat_name(int c);
@@ -172,6 +185,7 @@ int ini_has_section(const ini_file *ini, const char *sec);
 
 int zip_extract(const char *zip, const char *dest);
 int zip_extract_file(const char *zip, const char *member, char *out, size_t cap);
+int zip_extract_bin(const char *zip, const char *member, unsigned char *out, size_t cap, size_t *len);
 
 int pkg_list_load(pkg_rec **out, int *n);
 int pkg_find(const char *id, pkg_rec *out);
@@ -183,6 +197,8 @@ int svc_save_all(svc_rec *list, int n);
 int svc_remove_prefix(const char *id);
 int cmd_install(int argc, char **argv);
 int cmd_uninstall(int argc, char **argv);
+int cmd_ui(int argc, char **argv);
+void ui_reset(void);
 int cmd_wipe(int argc, char **argv);
 int cmd_pkg_info(const char *arg);
 int cmd_compat(const char *arg);
@@ -202,9 +218,33 @@ int cmd_usb_info(int list);
 int cmd_compat_check(int argc, char **argv);
 int cacerts_remove_owned(const char *only);
 void md5_file_hex(const char *path, char out[33]);
+void md5_str_hex(const char *s, char out[33]);
 
 int cmd_service(int argc, char **argv);
 int cmd_watchdog(void);
+int cmd_livepatch(int argc, char **argv);
+int cmd_boot_apply(void);
+void lp_boot_ok(void);
+int lp_wrapper_install(void);
+int lp_wrapper_remove(void);
+int lp_check(const ini_file *ini, const char *id);
+int lp_prepare(const char *id, const ini_file *ini, const char *name, const char *version, const char *stage);
+int lp_commit(const char *id);
+void lp_swap_flush(void);
+void lp_finish_remove(const char *id);
+void lp_discard(const char *id);
+int lp_damaged_take(char *buf, size_t cap);
+void lp_damaged_clear(void);
+void lp_hook_watch(const char *hook, int after);
+void lp_swap_app(char *out, size_t cap);
+int lp_props_check(const ini_file *ini, const char *id);
+int lp_swap_pending(void);
+int lp_swap_running(void);
+void lp_swap_now(void);
+int cmd_prop(int argc, char **argv);
+void lp_props_remove(const char *id);
+int lp_props_install(const ini_file *ini, const char *id);
+void lp_props_boot(void);
 int cmd_svcmgr(void);
 int svc_start(const char *qname);
 int svc_start_ex(const char *qname, int manual);
@@ -216,11 +256,24 @@ int cmd_root(int argc, char **argv);
 int cmd_remount(int argc, char **argv);
 int cmd_log(int argc, char **argv);
 int cmd_usb_handler(void);
+int spawn_am(char *const argv[]);
+void add_es(char **argv, int *n, const char *key, const char *val);
+
+int cmd_queue(int argc, char **argv);
+int cmd_reboot(int argc, char **argv);
+/* Takes the job tunnel for this process unless it already runs inside a job. */
+void job_guard(const char *tag);
+void real_reboot(const char *val);
+void reboot_req_clear(void);
+int drain_reboot(void);
+void drain_swap(void);
+void queue_scan_boot(void);
 
 int cmd_ota_block(int argc, char **argv);
 int cmd_selinux(int argc, char **argv);
 int cmd_adb(int argc, char **argv);
 void host_state_restore(void);
+void host_state_boot_apply(void);
 
 int become_root(void);
 int su_listen(int fds[2]);

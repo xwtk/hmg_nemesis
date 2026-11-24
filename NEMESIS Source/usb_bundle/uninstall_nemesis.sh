@@ -15,6 +15,10 @@ NEMESIS_QB_MARKER="NEMESIS_QB_HOOK"
 INSTALL_RECOVERY=/system/etc/install-recovery.sh
 
 mount -o remount,rw /system 2>/dev/null || mount -o rw,remount / 2>/dev/null || true
+# LivePatch wrapper: put the real zygote binary back, or the framework would not start.
+if [ -f /system/bin/app_process.real ]; then
+    mv -f /system/bin/app_process.real /system/bin/app_process
+fi
 rm -f "$INSTALL_RECOVERY" /system/xbin/nemesis /system/app/NEMESIS.apk
 if [ -f "$QB_RUNTIME" ] && grep -q "$NEMESIS_QB_MARKER" "$QB_RUNTIME" 2>/dev/null; then
     _tmp="${QB_RUNTIME}.nemesis_rm"

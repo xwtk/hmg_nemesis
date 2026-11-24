@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.nemesis.manager"
-    android:versionCode="26"
-    android:versionName="1.16.9">
+    android:versionCode="28"
+    android:versionName="1.17">
     <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="19" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -49,8 +49,9 @@
             android:name=".StoreDetailActivity"
             android:theme="@style/Hkmc" />
         <activity
-            android:name=".UpdatesActivity"
-            android:theme="@style/Hkmc" />
+            android:name=".PackageManagerActivity"
+            android:theme="@style/Hkmc"
+            android:launchMode="singleTop" />
         <activity
             android:name=".PackageActivity"
             android:theme="@style/Hkmc" />

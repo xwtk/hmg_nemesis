@@ -1,6 +1,7 @@
 */out/
 NEMESIS Source/out/
 NEMESIS Source/native/*.o
+NEMESIS Source/porter/build/
 NEMESIS Source/native/nemesis
 NEMESIS Source/manager/*.apk
 NEMESIS Source/manager/classes/

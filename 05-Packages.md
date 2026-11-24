@@ -28,7 +28,8 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 
 | Key | Required | Meaning |
 |-----|----------|---------|
-| `version` | recommended | Descriptor format: `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. |
+| `version` | recommended | Descriptor format: `1.2`, `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. A newer version than this release reads (for example `1.3`) makes the package incompatible: the Store says to update NEMESIS, and install refuses it even with the risk accepted. NEMESIS update packages are exempt. |
+| `favicon` | no | `1.2`: an image inside the package (PNG or JPEG, up to 256 KiB), shown in the Store, My Packages and Package Manager. It must be a relative path with no `..`. Missing, too large, or not an image shows the generic app icon. |
 | `id` | yes | Install id. Max 64 characters: letters, digits, `.`, `_`, `-`. No leading `.` or `-`, no `..`. |
 | `name` | recommended | Display name (defaults to `id`) |
 | `type` | recommended | Comma list, e.g. `application,service` (shown in `pkg-list`). A `1.0` descriptor names this key `types`, and each format reads the other name as a fallback. |
@@ -42,6 +43,8 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `postinstall` | no | Script run **after** copy, APK install, and service register; cwd = `/data/nemesis/apps/<id>` |
 | `preuninstall` | no | Script run after services are stopped, before APKs/`rm` |
 | `postuninstall` | no | Copied to tmp then run so it still exists after the tree is deleted |
+
+A package may also carry `[patch.N]`, `[file.N]` and `[prop.N]` sections to change stock files and properties without writing `/system`. See [09 - LivePatch](09-LivePatch.md).
 
 All listed scripts run as **root** (or `system` if you set `uid=system` on a service; hooks themselves use root).
 
@@ -183,7 +186,7 @@ Scripts must be `#!/system/bin/sh` and toolbox-only. Prefer `nemesis remount rw`
 
 Worked examples in the source tree: `examples/package-hello/`, `examples/package-hello-v2/` (`mode=background` on v2), `packages/usb-handler/`, `packages/adb-tcp/`, `packages/wireless-projection/`, `packages/projection-tbt/`.
 
-Packages that change files already on the head unit (`adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session`) copy those live files into `/data/nemesis/backup/<id>/` during `postinstall`, then apply their change. `adb.tcp` and `wireless.projection` restore that snapshot once in `preuninstall`, then delete the backup directory. If the restore fails, the backup stays. `voicehandler.vr-gates` restores in `preuninstall` and drops its backup from `postuninstall` only after the live file is stock again. `adb.tcp` and `wireless.projection` restore only the snapshot taken on that unit, so the same package can be installed on another head unit and uninstalled back to that unit's own files. A file shipped inside the package is the payload install writes (a feature XML, a patched odex, or a patched apk). `projection.tbt` and `carplay.session` are built for firmware 260507.
+Packages that change files or properties already on the head unit (`adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session`, `enhanced.projection`) do it with LivePatch: `[patch.N]`, `[file.N]` and `[prop.N]` sections in `NEMESIS.data`. `/system` is not written, and no hook backs up or restores live files. See [09 - LivePatch](09-LivePatch.md). Their 1.x releases edited `/system` in place and kept a copy in `/data/nemesis/backup/<id>/`. The 2.x `preinstall` refuses to install while that backup exists, so uninstall the 1.x copy first. `projection.tbt` and `carplay.session` are built for firmware 260507.
 
 ### 5.2 Zip
 
@@ -236,7 +239,19 @@ nemesis install /storage/usb0/packages/my.tool.zip
 nemesis install --update /storage/usb0/packages/my.tool.zip
 ```
 
-**Manager:** **Package Store** installs from the portal or a `type=list` stick. Anything installed by any path appears in **My Packages**, which has Launch and Uninstall on the package's screen.
+**Manager:** **Package Store** installs from the portal or a USB stick (a `type=list` stick, or a `type=install` stick, which shows its one package). Anything installed by any path appears in **My Packages**, which has Launch and Uninstall on the package's screen.
+
+**Queue:** Store installs, USB installs and Manager uninstalls go through one queue in `/data/nemesis/queue`, one job at a time. No progress popup appears: each one opens **Package Manager** on that package. Package Manager lists Available updates, In progress, Interrupted and Installed. Its rows show the script's status line and a progress bar. The Store downloads up to 3 packages at once, and each download has an X to cancel it. A zip on a USB stick is copied to `/data` first, so pulling the stick does not break the install.
+
+```sh
+nemesis queue add [--accept-risk] [--move] <zip>   # prints "queued <seq> <id>"
+nemesis queue uninstall <id>
+nemesis queue resume <seq|all> [--accept-risk]
+nemesis queue delete <seq|all>
+nemesis queue list
+```
+
+A `reboot` from a hook while a job runs does not reboot. It is held until the queue is empty. Then NEMESIS shows a 15 s countdown: **Restart now**, or **Not now** to skip the reboot. Outside a job, `reboot` and `nemesis reboot` reboot right away. Jobs that a reboot or power loss cut off are **Interrupted**. On the next boot Package Manager asks whether to continue them. One that stopped inside a script is flagged, because the unit may be half-changed.
 
 ### 5.4 Uninstall
 
@@ -244,7 +259,7 @@ nemesis install --update /storage/usb0/packages/my.tool.zip
 nemesis uninstall my.tool
 ```
 
-Uninstall runs `preuninstall` in `/data/nemesis/apps/<id>/`, removes that package's APKs and services, runs `postuninstall` if the package lists one, then deletes the package directory. `adb.tcp` and `wireless.projection` do not list `postuninstall`. Their snapshot in `/data/nemesis/backup/<id>/` is removed at the end of a successful `preuninstall`.
+Uninstall runs `preuninstall` in `/data/nemesis/apps/<id>/`, removes that package's APKs and services, runs `postuninstall` if the package lists one, then deletes the package directory. A LivePatch package's mounts and props are removed as part of the same queue job (see [09 - LivePatch](09-LivePatch.md)).
 
 Locked packages print `package is locked` and stay. Wipe NEMESIS removes everything, including locked. If `preuninstall` or `pm uninstall` fails, the package stays, its services are started again, and the exit code is 5. `--force` carries on past that failure.
 

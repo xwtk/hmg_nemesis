@@ -1,0 +1,26 @@
+#!/system/bin/sh
+# LivePatch exec tool: lp-edit featurexml|wpa|overlay <in> <out>. Exit 10 = nothing to change.
+kind="$1"; in="$2"; out="$3"
+CR=$(print -r -- $'\r')
+n=0
+seen=0
+: > "$out" || exit 1
+while IFS= read -r line || [ -n "$line" ]; do
+    m=${line%$CR}
+    case "$kind:$m" in
+        featurexml:\#*) ;;
+        featurexml:*androidauto_wireless.xml|featurexml:*carplay_wireless.xml)
+            line="#$line"; n=$((n + 1)) ;;
+        wpa:p2p_disabled=0) seen=1 ;;
+        wpa:p2p_disabled=*) line="p2p_disabled=0"; seen=1; n=$((n + 1)) ;;
+        overlay:p2p_no_go_freq=*) n=$((n + 1)); continue ;;
+    esac
+    print -r -- "$line" >> "$out" || exit 1
+done < "$in"
+if [ "$kind" = wpa ] && [ "$seen" -eq 0 ]; then
+    print -r -- "p2p_disabled=0" >> "$out" || exit 1
+    n=1
+fi
+[ "$n" -gt 0 ] || { rm -f "$out"; exit 10; }
+[ -s "$out" ] || exit 1
+echo "lp-edit: $kind $in: $n line(s)"

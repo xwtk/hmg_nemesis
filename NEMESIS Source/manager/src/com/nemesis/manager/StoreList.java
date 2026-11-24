@@ -35,6 +35,8 @@ final class StoreList {
         String localZip = "";
         /** The os and model lines of the verdict, one per line. */
         String reasons = "";
+        /** Metadata 1.2 favicon, extracted by pkg-info; "" for none. */
+        String favicon = "";
     }
 
     private StoreList() {
@@ -146,7 +148,7 @@ final class StoreList {
         return sb.toString();
     }
 
-    /** id to package-version from pkg-list: id|name|locked|types|package-version|short-desc. */
+    /** id to package-version from pkg-list: id|name|locked|types|package-version|short-desc|favicon. */
     static Map<String, String> parseInstalled(String text) {
         Map<String, String> out = new HashMap<String, String>();
         String[] lines = text == null ? new String[0] : text.split("\n");

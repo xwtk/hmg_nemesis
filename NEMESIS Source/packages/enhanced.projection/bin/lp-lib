@@ -1,0 +1,10 @@
+#!/system/bin/sh
+# LivePatch exec tool: lp-lib <kind> <in> <out>. Exit 10 = <in> is already patched.
+kind="$1"; in="$2"; out="$3"
+./bin/livepatch check "$in" "$kind"
+rc=$?
+[ "$rc" -eq 10 ] && exit 10
+[ "$rc" -eq 0 ] || { echo "lp-lib: $in does not match the $kind pattern ($rc)"; exit 1; }
+./bin/livepatch apply "$in" "$out" "$kind" || exit 1
+./bin/livepatch check "$out" "$kind"
+[ "$?" -eq 10 ] || { echo "lp-lib: patch did not take"; exit 1; }

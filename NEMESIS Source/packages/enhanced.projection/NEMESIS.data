@@ -1,23 +1,103 @@
 [nemesis]
-version=1.1
+version=1.2
 id=enhanced.projection
 name=Enhanced Phone Projection
 type=application
-package-version=1.23
+package-version=3.0.0
 short-desc="Wireless CarPlay, improved Android Auto, Turn-by-Turn guidance."
 detailed-desc="Enhanced Phone Projection:
 - Wireless CarPlay
 - Turn-by-Turn on cluster and HUD
 - Improved Android Auto
-Fixes: unstable CarPlay Turn-by-Turn, wireless CarPlay freezing, projection staying connected with screens OFF, bad USB CarPlay/AA switching."
-os="CVEV.*.260507"
-models="cvev_*"
-depends=wireless.projection,!wireless.carplay.aa
+For 131 Kia/Hyundai S5W_M builds on V015.011, V015.012 and V039.001. Other builds are refused at install, see the log.
+Fixes CarPlay TBT and freezes."
+os="*.V015.012.260507, *.V015.011.260206, *.V039.001.260902, *.V016.010.260903"
+models=any
+depends=usb-handler@>=1.17,wireless.projection,!wireless.carplay.aa
 preinstall=scripts/pre.sh
-postinstall=scripts/post.sh
-preuninstall=scripts/preun.sh
 
 [app.0]
 kind=sh
 path=bin/status.sh
 uid=root
+
+[patch.1]
+target=/system/app/HKMC_DiPO.odex
+engine=dex
+app=HKMC_DiPO
+pack=files/porter
+stop=com.daudio.app.dipo
+
+[patch.2]
+target=/system/app/Iap2ServerApp.odex
+engine=dex
+app=Iap2ServerApp
+pack=files/porter
+stop=com.tcc.iap2server
+
+[patch.3]
+target=/system/app/Bluetooth.odex
+engine=dex
+app=Bluetooth
+pack=files/porter
+stop=com.android.bluetooth
+
+[patch.4]
+target=/system/app/PhoneProjection.odex
+engine=dex
+app=PhoneProjection
+pack=files/porter
+stop=com.daudio.app.phoneprojection
+
+[patch.5]
+target=/system/app/HKMC_GPM.odex
+engine=dex
+app=HKMC_GPM
+pack=files/porter
+
+[patch.6]
+target=/system/app/HKMC_Navi_ExSL.odex
+engine=dex
+app=HKMC_Navi_ExSL
+pack=files/porter
+stop=com.mnsoft.navi
+
+[patch.7]
+target=/system/lib/libCarPlayCore.so
+engine=exec
+tool=bin/lp-lib
+args=core
+stop=com.daudio.app.dipo
+
+[patch.8]
+target=/system/lib/libCarPlayAudio.so
+engine=exec
+tool=bin/lp-lib
+args=audio
+stop=com.daudio.app.dipo
+
+[patch.9]
+target=/system/lib/libCarPlayUtils.so
+engine=exec
+tool=bin/lp-lib
+args=utils
+stop=com.daudio.app.dipo
+
+[patch.10]
+target=/system/lib/libautoreceiver_infobank.so
+engine=exec
+tool=bin/lp-lib
+args=recv
+stop=com.daudio.app.dipo
+
+[file.1]
+target=/system/lib/libCarPlayConverter.so
+source=files/libCarPlayConverter.so
+
+[prop.1]
+key=persist.sys.iap2.wifi
+value=t
+
+[prop.2]
+key=persist.sys.iap2.btconnection
+value=t

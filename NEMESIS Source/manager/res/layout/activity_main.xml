@@ -18,16 +18,58 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1">
-                <TextView
-                    android:text="@string/my_packages"
-                    android:singleLine="true"
-                    android:ellipsize="end"
-                    android:textSize="24sp"
-                    android:textColor="#ffb6c1c8"
+                <LinearLayout
+                    android:id="@+id/pm_status"
+                    android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingLeft="22dp"
+                    android:background="@drawable/co_list_selector"
+                    android:paddingRight="16dp"
                     android:layout_width="match_parent"
-                    android:layout_height="52dp" />
+                    android:layout_height="52dp">
+                    <TextView
+                        android:text="@string/my_packages"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:textSize="24sp"
+                        android:textColor="#ffb6c1c8"
+                        android:paddingLeft="22dp"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+                    <TextView
+                        android:id="@+id/pm_updates"
+                        android:drawableLeft="@android:drawable/stat_sys_download_done"
+                        android:contentDescription="@string/sec_updates"
+                        android:textSize="20sp"
+                        android:textColor="#ffb6c1c8"
+                        android:gravity="center_vertical"
+                        android:paddingLeft="10dp"
+                        android:visibility="gone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/pm_progress"
+                        android:drawableLeft="@android:drawable/ic_popup_sync"
+                        android:contentDescription="@string/sec_progress"
+                        android:textSize="20sp"
+                        android:textColor="#ffb6c1c8"
+                        android:gravity="center_vertical"
+                        android:paddingLeft="10dp"
+                        android:visibility="gone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/pm_interrupted"
+                        android:drawableLeft="@android:drawable/ic_dialog_alert"
+                        android:contentDescription="@string/sec_interrupted"
+                        android:textSize="20sp"
+                        android:textColor="#ffb6c1c8"
+                        android:gravity="center_vertical"
+                        android:paddingLeft="10dp"
+                        android:visibility="gone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
                 <TextView
                     android:id="@+id/empty"
                     android:text="@string/empty_packages"

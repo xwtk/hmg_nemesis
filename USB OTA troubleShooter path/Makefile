@@ -6,7 +6,7 @@ SRC := $(HERE)/../NEMESIS Source
 .PHONY: all clean verify
 
 all:
-	$(MAKE) -C "$(SRC)" native manager
+	$(MAKE) -C "$(SRC)" native manager porter
 	mkdir -p "$(HERE)/out"
 	cd "$(HERE)" && python3 make_troubleshooter_tar.py
 	sh "$(HERE)/verify_tars.sh"

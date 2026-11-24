@@ -15,6 +15,8 @@ final class TwoLineAdapter extends BaseAdapter {
         String summary;
         String key;
         boolean locked;
+        /** Favicon path; "" shows the generic app icon, null shows no icon at all. */
+        String icon;
 
         Row(String title, String summary, String key, boolean locked) {
             this.title = title;
@@ -82,6 +84,11 @@ final class TwoLineAdapter extends BaseAdapter {
             title.setTextColor(on ? 0xFFFFFFFF : 0xFF62797F);
         } else if (v instanceof TextView) {
             ((TextView) v).setText(r.title);
+        }
+        android.widget.ImageView icon = (android.widget.ImageView) v.findViewById(R.id.row_icon);
+        if (icon != null) {
+            icon.setVisibility(r.icon == null ? View.GONE : View.VISIBLE);
+            if (r.icon != null) Icons.set(icon, r.icon);
         }
         TextView s = (TextView) v.findViewById(R.id.row_summary);
         if (s != null) {

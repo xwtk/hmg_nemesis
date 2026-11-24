@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 SHORT_MAX = 64
+FAVICON_MAX = 256 * 1024
 DETAIL_MAX = 256
 VER_RE = re.compile(r"^\d+(\.\d+)*$")
 ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$")
@@ -136,6 +137,17 @@ def validate(meta_path: Path) -> list[str]:
             errors.append(f"bad depends entry: {item}")
         elif dep == pid:
             errors.append("package depends on itself")
+    fav = get("favicon")
+    if fav:
+        if not (VER_RE.match(ver) and tuple(map(int, ver.split("."))) >= (1, 2)):
+            warnings.append("favicon= needs version=1.2")
+        img = meta_path.parent / fav
+        if fav.startswith("/") or ".." in fav or "\\" in fav:
+            errors.append(f"favicon must be a path inside the package: {fav}")
+        elif not img.is_file():
+            errors.append(f"favicon file is missing: {fav}")
+        elif img.stat().st_size > FAVICON_MAX:
+            errors.append(f"favicon is {img.stat().st_size} bytes (max {FAVICON_MAX})")
     if errors:
         raise SystemExit(f"{meta_path}: " + "; ".join(errors))
     return warnings

@@ -622,8 +622,12 @@ static int run_named_hook(const ini_file *ini, const char *root, const char *key
     char script[MAX_PATH];
     const char *rel = ini_get(ini, "nemesis", key);
     if (!hook_path(script, sizeof(script), root, rel)) return 0;
+    int rc;
     log_msg("hook %s -> %s", key, script);
-    return run_script(script, root, "root");
+    lp_hook_watch(key, 0);
+    rc = run_script(script, root, "root");
+    lp_hook_watch(key, 1);
+    return rc;
 }
 
 /* force: carry on when preuninstall or pm uninstall fails. Without it the
@@ -644,6 +648,12 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
     snprintf(root, sizeof(root), "%s/%s", NEMESIS_APPS, id);
     snprintf(meta, sizeof(meta), "%s/NEMESIS.data", root);
     if (is_file(meta) && ini_load(&ini, meta) == 0) have_ini = 1;
+    /* LivePatch first: the rest of each chain is re-ported while the old output stays mounted. */
+    if (lp_prepare(id, NULL, NULL, NULL, NULL) != 0 || lp_commit(id) != 0) {
+        fprintf(stderr, "uninstall failed: %s: LivePatch could not re-port the other packages\n", id);
+        if (have_ini) ini_free(&ini);
+        return 5;
+    }
     stop_pkg_services(id);
     if (have_ini) {
         rc = run_named_hook(&ini, root, "preuninstall");
@@ -652,6 +662,7 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
             fprintf(stderr, "uninstall failed: %s: preuninstall exited %d\n", id, rc);
             ini_free(&ini);
             start_pkg_services(id);
+            lp_swap_flush(); /* shortcut: its patches are already off; a retried uninstall finds nothing to port */
             return 5;
         }
         if (pm_uninstall_apks(&ini, root) && !force) {
@@ -659,6 +670,7 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
             fprintf(stderr, "uninstall failed: %s: Android app still installed\n", id);
             ini_free(&ini);
             start_pkg_services(id);
+            lp_swap_flush();
             return 5;
         }
     }
@@ -669,13 +681,16 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
         if (hook_path(script, sizeof(script), root, rel) && is_file(script)) {
             snprintf(tmpun, sizeof(tmpun), "%s/postun-%s.sh", NEMESIS_TMP, id);
             copy_file(script, tmpun, 0755);
+            lp_hook_watch("postuninstall", 0);
             run_script(tmpun, root, "root");
+            lp_hook_watch("postuninstall", 1);
             unlink(tmpun);
         }
         ini_free(&ini);
     }
     rm_rf(root);
     pkg_remove(id);
+    lp_finish_remove(id);
     log_msg("uninstalled %s", id);
     return 0;
 }
@@ -703,6 +718,11 @@ static int do_fresh_install(const char *stage, ini_file *ini,
         fprintf(stderr, "pm install failed\n");
         return 1;
     }
+    if (lp_commit(id) != 0) {
+        pm_uninstall_apks(ini, dest);
+        rm_rf(dest);
+        return 1;
+    }
     register_services(ini, id, dest);
     memset(&rec, 0, sizeof(rec));
     snprintf(rec.id, sizeof(rec.id), "%s", id);
@@ -711,23 +731,32 @@ static int do_fresh_install(const char *stage, ini_file *ini,
     snprintf(rec.types, sizeof(rec.types), "%s", types);
     pkg_upsert(&rec);
     rc = run_named_hook(ini, dest, "postinstall");
+    lp_swap_flush();
     start_pkg_services(id);
     return rc;
 }
 
+/* Any spelling counts; it is renamed to NEMESIS.data, the only name readers of
+ * apps/<id>/ open. `dir` is a freshly extracted stage. */
 static int dir_has_meta(const char *dir) {
     DIR *d;
     struct dirent *e;
+    char from[MAX_PATH], to[MAX_PATH];
     int found = 0;
     d = opendir(dir);
     if (!d) return 0;
     while ((e = readdir(d))) {
         if (!strcasecmp(e->d_name, "NEMESIS.data")) {
             found = 1;
+            snprintf(from, sizeof(from), "%s/%s", dir, e->d_name);
             break;
         }
     }
     closedir(d);
+    if (found) {
+        snprintf(to, sizeof(to), "%s/NEMESIS.data", dir);
+        if (strcmp(from, to) && rename(from, to) != 0) return 0;
+    }
     return found;
 }
 
@@ -781,6 +810,8 @@ int cmd_install(int argc, char **argv) {
         return 1;
     }
     ensure_dirs();
+    job_guard("install");
+    ui_reset();
     if (load_zip_meta(zip, &ini, &meta) != 0) return 1;
     id = meta.id;
     have_existing = pkg_find(id, &existing) == 0;
@@ -818,6 +849,14 @@ int cmd_install(int argc, char **argv) {
         return 22;
     }
     compat = pkg_compat(&meta, reasons, sizeof(reasons));
+    /* Not a risk to accept: this binary would skip what the package asks for. */
+    if (meta_too_new(&meta)) {
+        printf("compat=incompatible\n%s", reasons);
+        fflush(stdout);
+        fprintf(stderr, "Package \"%s\" requires newer version of NEMESIS.\n", meta.name);
+        ini_free(&ini);
+        return 24;
+    }
     if (compat == COMPAT_NONE && !accept_risk) {
         printf("compat=incompatible\n%s", reasons);
         fflush(stdout);
@@ -827,6 +866,10 @@ int cmd_install(int argc, char **argv) {
     }
     if (compat != COMPAT_FULL)
         log_msg("install %s: compat=%s%s", id, compat_name(compat), accept_risk ? " (risk accepted)" : "");
+    if (lp_check(&ini, id) != 0) {
+        ini_free(&ini);
+        return 25;
+    }
     snprintf(stage, sizeof(stage), "%s/stage/%s", NEMESIS_TMP, id);
     snprintf(stage_top, sizeof(stage_top), "%s", stage);
     rm_rf(stage);
@@ -847,6 +890,12 @@ int cmd_install(int argc, char **argv) {
         }
         if (strcmp(pkgroot, stage))
             snprintf(stage, sizeof(stage), "%s", pkgroot);
+    }
+    /* Ports into livepatch/work/<id> before any hook; a conflict stops the install here. */
+    if (lp_prepare(id, &ini, meta.name, meta.pkg_ver, stage) != 0) {
+        ini_free(&ini);
+        rm_rf(stage_top);
+        return 26;
     }
     if (have_existing && update) {
         char oldroot[MAX_PATH], oldmeta[MAX_PATH];
@@ -902,16 +951,70 @@ int cmd_uninstall(int argc, char **argv) {
         return 1;
     }
     ensure_dirs();
+    job_guard("uninstall");
     if (pkg_find(id, NULL) == 0 && print_dependents(id, NULL) > 0) {
         fprintf(stderr, "uninstall blocked: other packages depend on %s\n", id);
         return 4;
     }
+    ui_reset();
     rc = uninstall_tree(id, 0, force);
     if (rc == 0) {
         fprintf(stdout, "ok uninstalled %s\n", id);
         fflush(stdout);
     }
     return rc;
+}
+
+/* Clears the live-UI files so a run starts blank; hooks then populate them. */
+void ui_reset(void) {
+    unlink(UI_STATUS);
+    unlink(UI_PROGRESS);
+    unlink(UI_ERROR);
+}
+
+/* Hooks report install/uninstall progress the Manager popup polls:
+ *   nemesis ui status <text>                 (one line under "Installing…")
+ *   nemesis ui progress <type> <max> <cur>   (type 0=percent, 1=count)
+ *   nemesis ui error <text>                  (shown if the op fails)
+ *   nemesis ui clear                         (wipe all three)
+ * An empty status/error text clears that one file. */
+int cmd_ui(int argc, char **argv) {
+    const char *sub = argc > 0 ? argv[0] : "";
+    mkdir_p(SESSION_DIR, 0755);
+    chmod(SESSION_DIR, 0777);
+    if (!strcmp(sub, "status") || !strcmp(sub, "error")) {
+        const char *path = !strcmp(sub, "status") ? UI_STATUS : UI_ERROR;
+        char line[600];
+        if (argc < 2 || !argv[1][0]) {
+            unlink(path);
+            return 0;
+        }
+        snprintf(line, sizeof(line), "%s\n", argv[1]);
+        return write_file(path, line, 0644) == 0 ? 0 : 1;
+    }
+    if (!strcmp(sub, "progress")) {
+        char line[64], *e1, *e2, *e3;
+        long type, max, cur;
+        if (argc < 4) {
+            fprintf(stderr, "usage: nemesis ui progress <type> <max> <current>\n");
+            return 1;
+        }
+        type = strtol(argv[1], &e1, 10);
+        max = strtol(argv[2], &e2, 10);
+        cur = strtol(argv[3], &e3, 10);
+        if (*e1 || *e2 || *e3 || (type != 0 && type != 1)) {
+            fprintf(stderr, "ui progress: type (0|1) max current must be integers\n");
+            return 1;
+        }
+        snprintf(line, sizeof(line), "%ld %ld %ld\n", type, max, cur);
+        return write_file(UI_PROGRESS, line, 0644) == 0 ? 0 : 1;
+    }
+    if (!strcmp(sub, "clear")) {
+        ui_reset();
+        return 0;
+    }
+    fprintf(stderr, "usage: nemesis ui status|progress|error|clear ...\n");
+    return 1;
 }
 
 static void print_meta(const pkg_meta *m) {
@@ -923,6 +1026,33 @@ static void print_meta(const pkg_meta *m) {
     meta_escape_field(m->detailed_desc, esc, sizeof(esc));
     printf("detailed-desc=%s\n", esc);
     printf("depends=%s\nos=%s\nmodels=%s\n", m->depends, m->os, m->models);
+}
+
+/* A file the Manager can open: the installed copy, or one read out of the zip. */
+static void favicon_file(const pkg_meta *m, const char *zip, char *out, size_t cap) {
+    out[0] = 0;
+    if (!m->favicon[0]) return;
+    if (!zip) {
+        snprintf(out, cap, "%s/%s/%s", NEMESIS_APPS, m->id, m->favicon);
+        if (!is_file(out)) out[0] = 0;
+        return;
+    }
+    {
+        unsigned char *buf = malloc(FAVICON_MAX);
+        size_t len = 0;
+        int fd, rc = buf ? zip_extract_bin(zip, m->favicon, buf, FAVICON_MAX, &len) : -1;
+        if (rc == -2) log_msg("favicon %s of %s is over %d bytes", m->favicon, m->id, FAVICON_MAX);
+        if (rc == 0) {
+            mkdir_p(SESSION_DIR "/icons", 0755);
+            chmod(SESSION_DIR "/icons", 0755);
+            snprintf(out, cap, "%s/icons/%s.img", SESSION_DIR, m->id);
+            fd = open(out, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+            if (fd < 0 || write(fd, buf, len) != (ssize_t)len) out[0] = 0;
+            if (fd >= 0) close(fd);
+            chmod(out, 0644);
+        }
+        free(buf);
+    }
 }
 
 /* pkg-info <zip|installed-id>: descriptor fields, one key=value per line. */
@@ -947,6 +1077,11 @@ int cmd_pkg_info(const char *arg) {
     }
     inst = pkg_find(m.id, &rec) == 0;
     print_meta(&m);
+    {
+        char fav[MAX_PATH];
+        favicon_file(&m, is_file(arg) ? arg : NULL, fav, sizeof(fav));
+        printf("favicon=%s\n", fav);
+    }
     have[0] = 0;
     if (inst) installed_version(m.id, have, sizeof(have));
     printf("installed=%d\ninstalled-version=%s\nlocked=%d\n", inst, have, inst ? rec.locked : 0);
@@ -1007,8 +1142,8 @@ int cmd_compat(const char *arg) {
 }
 
 /*
- * id|name|locked|types|package-version|short-desc. The first four fields are
- * what 1.15 Managers read; short-desc is percent-encoded (% | CR LF).
+ * id|name|locked|types|package-version|short-desc|favicon. The first four fields
+ * are what 1.15 Managers read; short-desc is percent-encoded (% | CR LF).
  */
 int cmd_pkg_list(void) {
     pkg_rec *list = NULL;
@@ -1019,9 +1154,11 @@ int cmd_pkg_list(void) {
         pkg_meta m;
         char esc[META_SHORT_MAX * 12 + 1];
         if (installed_meta(list[i].id, &m) != 0) memset(&m, 0, sizeof(m));
+        char fav[MAX_PATH];
         meta_escape_field(m.short_desc, esc, sizeof(esc));
-        printf("%s|%s|%d|%s|%s|%s\n", list[i].id, list[i].name, list[i].locked, list[i].types,
-               m.pkg_ver, esc);
+        favicon_file(&m, NULL, fav, sizeof(fav));
+        printf("%s|%s|%d|%s|%s|%s|%s\n", list[i].id, list[i].name, list[i].locked, list[i].types,
+               m.pkg_ver, esc, fav);
     }
     free(list);
     fflush(stdout);
@@ -1127,7 +1264,7 @@ int cmd_pkg_launch(const char *id) {
 
 static const char *USB_HANDLER_META =
     "[nemesis]\n"
-    "version=1.1\n"
+    "version=" META_VERSION "\n"
     "id=usb-handler\n"
     "name=USB Handler\n"
     "type=service\n"
@@ -1150,7 +1287,7 @@ static const char *USB_HANDLER_SH =
 
 static const char *MONITOR_META =
     "[nemesis]\n"
-    "version=1.1\n"
+    "version=" META_VERSION "\n"
     "id=" MONITOR_ID "\n"
     "name=Update Monitor\n"
     "type=service\n"
@@ -1376,6 +1513,7 @@ int cmd_wipe(int argc, char **argv) {
         return 1;
     }
     ensure_dirs();
+    job_guard("wipe");
     log_msg("wipe begin");
     /* packages.db is in install order. */
     pkg_list_load(&list, &n);
@@ -1400,6 +1538,7 @@ int cmd_wipe(int argc, char **argv) {
     purge_manager_dalvik();
     if (remount_system(1) != 0)
         log_msg("wipe: remount /system rw failed errno=%d", errno);
+    lp_wrapper_remove();
     unlink(MANAGER_APK);
     unlink(INSTALL_RECOVERY);
     cacerts_remove_owned(NULL);
@@ -1425,10 +1564,11 @@ int cmd_wipe(int argc, char **argv) {
     }
     fprintf(stdout, "ok wiped\n");
     fflush(stdout);
+    /* Hook reboots folded into this one, or dropped with --no-reboot. */
+    reboot_req_clear();
     if (reboot) {
-        sync();
         sleep(1);
-        run_cmd("/system/bin/reboot");
+        real_reboot("reboot");
     }
     return 0;
 }

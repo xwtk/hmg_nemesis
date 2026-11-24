@@ -24,7 +24,7 @@ import java.util.Map;
 
 /** Package Store. Started by a type=list stick (store_mode=usb) or from the main screen.
  *  Exported through the stick flow, so extras never name a path: the list is read
- *  from the mounted stick with usb-info. */
+ *  from the mounted stick with usb-info. A stick with one package shows that one. */
 public class StoreActivity extends Activity {
     private static final int GREEN = 0xFF6FBF73;
     private static final int YELLOW = 0xFFE3C565;
@@ -34,7 +34,8 @@ public class StoreActivity extends Activity {
     private boolean usbTab;
     private boolean usbOk;
     private boolean onlineOk;
-    private boolean offlineShown;
+    /** A stick is mounted, with or without packages. */
+    private boolean usbMounted;
     private String usbRoot;
     private List<StoreList.Entry> usbRows = new ArrayList<StoreList.Entry>();
     private List<StoreList.Entry> onlineRows = new ArrayList<StoreList.Entry>();
@@ -46,7 +47,6 @@ public class StoreActivity extends Activity {
     private int loadGen;
     private int resolveGen;
     /** Opened by a list stick: its popup goes first, and online being down is no news. */
-    private boolean fromUsb;
     /** The stick's one package update check, spent on the first load. */
     private boolean usbLaunchCheck;
     private final RowAdapter adapter = new RowAdapter();
@@ -61,11 +61,10 @@ public class StoreActivity extends Activity {
         }
         Ui.bindTitle(this, R.string.store);
         usbTab = "usb".equals(getIntent().getStringExtra("store_mode"));
-        fromUsb = usbTab;
         usbLaunchCheck = usbTab;
         click(R.id.btn_updates, new Runnable() {
             public void run() {
-                startActivity(new Intent(StoreActivity.this, UpdatesActivity.class));
+                DialogActivity.openPm(StoreActivity.this, null);
             }
         });
         ListView lv = (ListView) findViewById(R.id.list);
@@ -78,12 +77,12 @@ public class StoreActivity extends Activity {
         });
         click(R.id.tab_usb, new Runnable() {
             public void run() {
-                if (usbOk) switchTab(true);
+                switchTab(true);
             }
         });
         click(R.id.tab_online, new Runnable() {
             public void run() {
-                if (onlineOk) switchTab(false);
+                switchTab(false);
             }
         });
         click(R.id.sort_field, new Runnable() {
@@ -143,15 +142,14 @@ public class StoreActivity extends Activity {
         new Thread(new Runnable() {
             public void run() {
                 Map<String, String> info = Cli.fields(Cli.run("usb-info"));
-                final boolean hasList = "list".equals(info.get("type"));
+                final boolean mounted = "1".equals(info.get("mounted"));
                 final String root = info.get("root");
-                final List<StoreList.Entry> rows = hasList
-                        ? StoreList.parseList(Cli.run("usb-info", "--list"))
-                        : new ArrayList<StoreList.Entry>();
+                final List<StoreList.Entry> rows = usbRows(info);
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (gen != loadGen || isFinishing()) return;
-                        usbOk = hasList;
+                        usbMounted = mounted;
+                        usbOk = !rows.isEmpty();
                         usbRoot = root;
                         usbRows = rows;
                         if (usbTab && !usbOk) usbTab = false;
@@ -170,13 +168,6 @@ public class StoreActivity extends Activity {
                         if (gen != loadGen || isFinishing()) return;
                         onlineOk = onlineFinal != null;
                         onlineRows = onlineOk ? onlineFinal : new ArrayList<StoreList.Entry>();
-                        if (!onlineOk && !offlineShown && !(fromUsb && usbOk)) {
-                            offlineShown = true;
-                            Intent i = new Intent(StoreActivity.this, DialogActivity.class);
-                            i.putExtra("nemesis_mode", "result_fail");
-                            i.putExtra("nemesis_message", getString(R.string.store_offline));
-                            startActivity(i);
-                        }
                         if (!usbTab) {
                             if (!onlineOk && usbOk) usbTab = true;
                             showRows();
@@ -198,6 +189,20 @@ public class StoreActivity extends Activity {
                 });
             }
         }).start();
+    }
+
+    /** A list stick's rows, or the one package of a single-package stick. */
+    static List<StoreList.Entry> usbRows(Map<String, String> info) {
+        String type = info.get("type");
+        if ("list".equals(type)) return StoreList.parseList(Cli.run("usb-info", "--list"));
+        List<StoreList.Entry> one = new ArrayList<StoreList.Entry>();
+        String root = info.get("root"), path = info.get("path");
+        if (type == null || !type.contains("install") || root == null || path == null
+                || !path.startsWith(root + "/")) return one;
+        StoreList.Entry e = new StoreList.Entry();
+        e.path = path.substring(root.length() + 1);
+        one.add(e);
+        return one;
     }
 
     private void showRows() {
@@ -247,6 +252,11 @@ public class StoreActivity extends Activity {
         e.detailedDesc = PackageActivity.unescape(or(m.get("detailed-desc"), ""));
         e.depends = or(m.get("depends"), "");
         e.reasons = StoreList.reasons(r.out);
+        // A single-package stick has no list to name it: the zip does.
+        if (e.name.length() == 0) e.name = or(m.get("name"), e.id);
+        if (e.shortDesc.length() == 0) e.shortDesc = PackageActivity.unescape(or(m.get("short-desc"), ""));
+        e.favicon = or(m.get("favicon"), "");
+        Icons.remember(e.id, e.favicon);
     }
 
     static void resolveOnline(Context ctx, StoreList.Entry e) throws Exception {
@@ -279,8 +289,12 @@ public class StoreActivity extends Activity {
         String q = ((EditText) findViewById(R.id.search)).getText().toString();
         shown = StoreList.view(all, q, showAll, byDate, ascending);
         adapter.notifyDataSetChanged();
-        tab(R.id.tab_usb, usbOk, usbTab);
-        tab(R.id.tab_online, onlineOk, !usbTab);
+        tab(R.id.tab_usb, usbTab);
+        tab(R.id.tab_online, !usbTab);
+        // Why the tab is empty, in place of the old popup.
+        ((TextView) findViewById(R.id.empty)).setText(usbTab
+                ? (usbMounted ? R.string.usb_no_packages : R.string.no_usb)
+                : (onlineOk ? R.string.empty_store : R.string.store_offline));
         ((Button) findViewById(R.id.sort_field)).setText(byDate ? R.string.sort_date : R.string.sort_name);
         ((Button) findViewById(R.id.sort_dir)).setText(ascending ? "↑" : "↓");
         Button more = (Button) findViewById(R.id.show_all);
@@ -290,11 +304,8 @@ public class StoreActivity extends Activity {
                 : getString(R.string.show_all).replace("%d", String.valueOf(hidden)));
     }
 
-    private void tab(int id, boolean enabled, boolean on) {
-        Button t = (Button) findViewById(id);
-        t.setEnabled(enabled);
-        t.setAlpha(enabled ? 1f : 0.35f);
-        t.setTextColor(on && enabled ? 0xFFFFFFFF : 0xFF62797F);
+    private void tab(int id, boolean on) {
+        ((Button) findViewById(id)).setTextColor(on ? 0xFFFFFFFF : 0xFF62797F);
     }
 
     private void open(StoreList.Entry e) {
@@ -330,6 +341,7 @@ public class StoreActivity extends Activity {
             TextView t = (TextView) v.findViewById(R.id.row_title);
             TextView s = (TextView) v.findViewById(R.id.row_summary);
             t.setText(e.name);
+            Icons.set((android.widget.ImageView) v.findViewById(R.id.row_icon), e.favicon);
             v.findViewById(R.id.row_installed_col).setVisibility(e.isInstalled ? View.VISIBLE : View.GONE);
             ((TextView) v.findViewById(R.id.row_installed_ver)).setText(e.installed);
             boolean newer = e.isInstalled && UpdateRule.compare(e.version, e.installed) > 0;

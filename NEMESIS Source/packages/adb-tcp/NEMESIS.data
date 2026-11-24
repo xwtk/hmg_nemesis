@@ -1,17 +1,35 @@
 [nemesis]
-version=1.1
+version=1.2
 id=adb.tcp
 name=Enable ADB accessibility
 type=application
-package-version=1.1.0
+package-version=2.0.0
 short-desc="Enables the ADB menu access in Engineering Mode."
 os=any
 models=any
+depends=usb-handler@>=1.17
 preinstall=scripts/pre.sh
 postinstall=scripts/post.sh
-preuninstall=scripts/preun.sh
 
 [app.0]
 kind=sh
 path=bin/status.sh
 uid=root
+
+[file.1]
+target=/system/etc/permissions/com.hkmc.software.engineermode.adb_hide.xml
+source=files/empty_permissions.xml
+optional=1
+
+[prop.1]
+key=persist.service.adb.tcp.enable
+value=1
+
+[prop.2]
+key=service.adb.tcp.port
+value=5555
+
+[prop.3]
+key=ro.adb.secure
+value=0
+restart=adbd

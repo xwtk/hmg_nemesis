@@ -2,12 +2,16 @@
 NATIVE := native/nemesis
 MANAGER := manager/NEMESIS.apk
 
-.PHONY: all native manager packages examples test-emu test-hooks test-meta clean
+.PHONY: all native porter manager packages examples test-emu test-hooks test-meta clean
 
-all: native manager packages examples
+all: native porter manager packages examples
 
 native:
 	$(MAKE) -C native
+
+# porter.jar is the shared dex engine, installed with NEMESIS; porter-host.jar runs tools/porter.sh on a PC.
+porter:
+	bash tools/build_porter.sh
 
 test-meta:
 	mkdir -p out
@@ -49,6 +53,7 @@ test-hooks:
 	python3 tests/store_logic_test.py
 	python3 tests/check_manager_apk.py
 	bash tests/pkg_live_snapshot.sh
+	python3 tests/pkg_livepatch_check.py
 
 clean:
 	$(MAKE) -C native clean

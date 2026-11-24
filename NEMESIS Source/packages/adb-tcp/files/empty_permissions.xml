@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- adb.tcp: the stock file hides the ADB menu; LivePatch mounts this empty list over it. -->
+<permissions>
+</permissions>

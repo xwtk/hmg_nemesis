@@ -27,7 +27,10 @@ public class UpdateService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         if (intent == null) return;
         try {
-            if (ACTION_ANDROID_UP.equals(intent.getAction())) AutoLaunch.run(this);
+            if (ACTION_ANDROID_UP.equals(intent.getAction())) {
+                AutoLaunch.run(this);
+                askResume();
+            }
             if (ACTION_WOKE.equals(intent.getAction())) {
                 SystemClock.sleep(WOKE_DELAY_MS);
                 AutoLaunch.run(this);
@@ -37,6 +40,15 @@ public class UpdateService extends IntentService {
         } catch (Throwable t) {
             CrashLog.note("update.log", "service: " + t);
         }
+    }
+
+    /** Work a reboot cut off: Package Manager asks whether to continue it. */
+    private void askResume() {
+        if (Queue.count(Queue.list(), false) == 0 && !Downloads.hasInterrupted(this)) return;
+        Intent i = new Intent(this, PackageManagerActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        i.putExtra("ask_resume", true);
+        startActivity(i);
     }
 
     /** Packages get their own 24 h clock. A popup on screen waits for the next tick. */
@@ -88,14 +100,11 @@ public class UpdateService extends IntentService {
         return "nemesis.core".equals(m.get("id")) ? m.get("package-version") : null;
     }
 
-    /** Partial downloads and leftovers; a Store popup on screen may own one, so it waits. */
+    /** A partial core update; an update popup on screen may own it, so it waits. Store
+     *  downloads are Downloads' own: it clears their leftovers when it first loads. */
     static void sweep(Context c) {
         if (DialogActivity.visible) return;
-        File[] files = c.getCacheDir().listFiles();
-        for (int k = 0; files != null && k < files.length; k++) {
-            String n = files[k].getName();
-            if (n.startsWith("store-package") || n.equals(ZIP_NAME + ".part")) files[k].delete();
-        }
+        new File(c.getCacheDir(), ZIP_NAME + ".part").delete();
         held(c);
     }
 

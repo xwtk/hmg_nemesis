@@ -48,6 +48,7 @@ static int write_all(const char *path, const void *data, size_t n, mode_t mode) 
         return -1;
     }
     close(fd);
+    chmod(path, mode); /* umask would otherwise strip bits */
     return 0;
 }
 
@@ -205,7 +206,8 @@ static int extract_cb(const char *name, const unsigned char *data, size_t n, voi
     struct extract_ctx *c = v;
     char path[MAX_PATH];
     snprintf(path, sizeof(path), "%s/%s", c->dest, name);
-    return write_all(path, data, n, 0644);
+    /* Zips from Windows or macOS carry no exec bit; scripts must run, so everything is 0755. */
+    return write_all(path, data, n, 0755);
 }
 
 int zip_extract(const char *zip, const char *dest) {
@@ -252,4 +254,45 @@ int zip_extract_file(const char *zip, const char *member, char *out, size_t cap)
     out[0] = 0;
     if (zip_iter(zip, file_cb, &c) != 0) return -1;
     return c.found ? 0 : -1;
+}
+
+struct bin_ctx {
+    const char *member;
+    size_t mlen;
+    unsigned char *out;
+    size_t cap, len;
+    int found, depth, big;
+};
+
+/* member is a path under the package root, which may sit inside one wrapper folder. */
+static int bin_cb(const char *name, const unsigned char *data, size_t n, void *v) {
+    struct bin_ctx *c = v;
+    size_t len = strlen(name);
+    const char *sl;
+    int depth = 0;
+    if (len < c->mlen || strcasecmp(name + len - c->mlen, c->member)) return 0;
+    if (len > c->mlen && name[len - c->mlen - 1] != '/') return 0;
+    for (sl = name; *sl; sl++)
+        if (*sl == '/') depth++;
+    if (c->found && depth >= c->depth) return 0;
+    c->found = 1;
+    c->depth = depth;
+    c->big = n > c->cap;
+    c->len = c->big ? 0 : n;
+    if (!c->big) memcpy(c->out, data, n);
+    return 0;
+}
+
+/* 0 and *len on success, -1 missing, -2 larger than cap. */
+int zip_extract_bin(const char *zip, const char *member, unsigned char *out, size_t cap, size_t *len) {
+    struct bin_ctx c;
+    memset(&c, 0, sizeof(c));
+    c.member = member;
+    c.mlen = strlen(member);
+    c.out = out;
+    c.cap = cap;
+    if (zip_iter(zip, bin_cb, &c) != 0 || !c.found) return -1;
+    if (c.big) return -2;
+    *len = c.len;
+    return 0;
 }

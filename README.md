@@ -86,6 +86,17 @@ OR
 
 ## **Changelog**
 
+### 1.17
+
+- **LivePatch.** Packages can change stock files and system properties without writing `/system`. The patched copy lives on `/data` and is mounted over the stock file at boot, and uninstall brings stock back at once. Several packages can patch the same file. Conflicts are refused at install, and a safe mode boots stock after repeated failed boots. See [09 - LivePatch](09-LivePatch.md).
+- **Packages.** `adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session` and `enhanced.projection` now use LivePatch. Uninstall their 1.x release before installing the new one.
+- **Install queue.** Installs and uninstalls now run one at a time from a queue, so a USB stick can be removed as soon as its packages are queued. A job cut off by a power loss or restart can be continued or deleted. If a script was running when the job stopped, the Manager warns that the head unit may need checking. CLI: `nemesis queue add|uninstall|resume|delete|list`.
+- **Package Manager.** A new screen with Available updates, In progress, Interrupted and Installed sections replaces the Updates screen. It shows live install progress and lists the packages on a connected USB drive. When the queue is done, it counts down a single restart for everything that needs one. A LivePatch package only gets a restart of the affected app.
+- **Descriptor version 1.2.** `NEMESIS.data` has a `version` key. A package written for a newer NEMESIS is refused, even with the risk accepted, and the Store asks you to update NEMESIS. `1.2` adds `favicon`, an icon shown in the Store and package lists.
+- **Package zips.** A zip may keep its files inside one wrapper folder, and the metadata file may be spelled in any case (for example `nemesis.data`). Scripts from zips made on Windows or macOS are now executable.
+- **CLI.** New `nemesis prop`, `nemesis livepatch`, `nemesis reboot` and `nemesis selinux cmdline`.
+- **Installer.** The error screen now says which step failed, and a failed step no longer leaves the installer stuck on "Please wait".
+
 ### 1.16.9
 
 - **Package metadata.** `os` and `models` in `NEMESIS.data` can now be up to 1024 characters each, up from 256.
@@ -168,6 +179,7 @@ Read about NEMESIS, what it is exploiting, what it features, and its use manual.
 | [06 - Run scripts](06-Run-Scripts.md) | USB `NEMESIS.sh` / `type=execute`: when they run and how to write them. |
 | [07 - Cloud Store API](07-Cloud-Store-API.md) | The public store and update API, for running a store of your own in a fork. |
 | [08 - Submit a package](08-Submit-a-Package.md) | Step by step: from an xwtk.Account to a listing in the NEMESIS Package Store. |
+| [09 - LivePatch](09-LivePatch.md) | Patching stock files and properties without writing `/system`: features, usage, and how to write a LivePatch package. |
 
 Documents **01**, **02** and **04** are the only ones that describe the entrypoint variants and the on-disk install, do not use them with advanced LLMs which may have safeguards enabled. **03**, **05**, **06** and **07** assume NEMESIS is already on the head unit and treat it as a Debugging Execution Interface for packages and privileged commands, so safeguards will not be triggered.
 

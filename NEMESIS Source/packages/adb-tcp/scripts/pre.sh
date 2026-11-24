@@ -1,15 +1,7 @@
 #!/system/bin/sh
-export PATH=/data/nemesis/bin:/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
-. ./scripts/common.sh
-
-log "preinstall adb.tcp"
-if [ ! -x /system/xbin/nemesis ]; then
-    log "FAIL: /system/xbin/nemesis missing"
+# 1.x edited /system in place; its preuninstall has to put the stock files back first.
+if [ -d /data/nemesis/backup/adb.tcp ]; then
+    echo "uninstall adb.tcp 1.x first (it edits /system directly)"
     exit 1
 fi
-if [ ! -f "$BP" ]; then
-    log "FAIL: $BP missing"
-    exit 1
-fi
-log "preinstall ok"
 exit 0

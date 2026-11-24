@@ -133,6 +133,16 @@ static void test_meta(void) {
           !strcmp(m.types, "service"), "1.1 falls back to types=");
     ini_free(&ini);
 
+    CHECK(parse("[nemesis]\nversion=1.2\nid=fav\nfavicon=res/icon.png\n", &ini, &m, err, sizeof(err)) == 0 &&
+          !strcmp(m.favicon, "res/icon.png"), "1.2 favicon: %s", err);
+    ini_free(&ini);
+    CHECK(parse("[nemesis]\nversion=1.2\nid=fav\nfavicon=../x.png\n", &ini, &m, err, sizeof(err)) != 0,
+          "favicon outside the package");
+    ini_free(&ini);
+    CHECK(parse("[nemesis]\nversion=1.2\nid=fav\nfavicon=/data/x.png\n", &ini, &m, err, sizeof(err)) != 0,
+          "absolute favicon");
+    ini_free(&ini);
+
     /* limits are counted in characters after unescaping */
     memset(longs, 'a', 64);
     longs[64] = 0;
@@ -241,6 +251,13 @@ static void test_compat(void) {
     char r[512];
     const char *os = "ECOKMC.USA.0000.V015.012.260507";
     CHECK(compat_of("[nemesis]\nid=a\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL, "1.0 no fields = full");
+    CHECK(compat_of("[nemesis]\nversion=1.3\nid=a\nname=Fancy Tool\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE &&
+          strstr(r, "Package \"Fancy Tool\" requires newer version of NEMESIS."),
+          "newer metadata = incompatible, by display name '%s'", r);
+    CHECK(compat_of("[nemesis]\nversion=" META_VERSION "\nid=a\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
+          "current metadata = full");
+    CHECK(compat_of("[nemesis]\nversion=1.3\nid=nemesis.core\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
+          "a core update may be newer");
     CHECK(compat_of("[nemesis]\nid=a\nos=ECOKMC.USA.*\nmodels=nq5_us\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
           "deps+os = full even if model differs");
     CHECK(compat_of("[nemesis]\nid=a\nos=ECOKMC.EUR.*\nmodels=cvev_us\n", os, "cvev_us", r, sizeof(r)) == COMPAT_PARTIAL,
