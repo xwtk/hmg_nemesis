@@ -193,7 +193,7 @@ final class Portal {
         return download(c, url, sha256, name, cancel, null);
     }
 
-    /** prog, when given, gets {bytes so far, Content-Length or -1}. */
+    /** prog, when given, gets {bytes so far, Content-Length}; prog[1] is kept when the server sends none. */
     static File download(Context c, String url, String sha256, String name, AtomicBoolean cancel,
                          long[] prog) throws Exception {
         File dir = c.getCacheDir();
@@ -205,7 +205,8 @@ final class Portal {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             if (prog != null) {
                 prog[0] = 0;
-                prog[1] = h.getContentLength();
+                long len = h.getContentLength();
+                if (len > 0) prog[1] = len;
             }
             InputStream in = h.getInputStream();
             OutputStream os = new FileOutputStream(tmp);

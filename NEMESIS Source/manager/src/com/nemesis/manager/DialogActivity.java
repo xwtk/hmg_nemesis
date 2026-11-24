@@ -72,6 +72,7 @@ public class DialogActivity extends Activity {
         } else {
             i.putExtra("nemesis_url", e.url);
             i.putExtra("nemesis_sha256", e.sha256);
+            i.putExtra("nemesis_size", e.size);
         }
         if (e.isInstalled) i.putExtra("nemesis_replace", e.id);
         return i;
@@ -317,9 +318,9 @@ public class DialogActivity extends Activity {
         if (confirm) {
             boolean updates = "pkg_updates".equals(mode);
             boolean count = "reboot_countdown".equals(mode);
-            if (count) yes.setText(swap() ? R.string.swap_now : R.string.reboot_now);
+            if (count) yes.setText(R.string.reboot_now);
             else yes.setText(updates ? R.string.view : R.string.yes);
-            no.setText(updates || count ? R.string.not_now : R.string.no);
+            no.setText(count ? R.string.later : updates ? R.string.not_now : R.string.no);
             yes.setVisibility(View.VISIBLE);
             yes.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -348,14 +349,7 @@ public class DialogActivity extends Activity {
     private void showCountdown() {
         TextView msg = (TextView) findViewById(R.id.message);
         if (msg == null) return;
-        String app = getIntent().getStringExtra("nemesis_name");
-        msg.setText(getString(swap() ? R.string.swap_countdown : R.string.reboot_countdown)
-                .replace("%s", app != null ? app : "apps").replace("%d", String.valueOf(countdown)));
-    }
-
-    /** A LivePatch swap: only the patched apps restart, not the head unit. */
-    private boolean swap() {
-        return "1".equals(getIntent().getStringExtra("nemesis_swap"));
+        msg.setText(getString(R.string.reboot_countdown, countdown));
     }
 
     /** Opens Package Manager on `id`'s row; installs show their progress there. */
@@ -387,9 +381,7 @@ public class DialogActivity extends Activity {
         if ("reboot_countdown".equals(mode)) {
             // nemesis is waiting on the reply and does the reboot.
             writeReply("yes");
-            // A swap restarts only the patched apps; nothing would end the progress view.
-            if (swap()) Ui.close(this);
-            else showProgress(getString(R.string.rebooting));
+            showProgress(getString(R.string.rebooting));
             return;
         }
         if ("confirm_resume".equals(mode)) {
@@ -598,6 +590,7 @@ public class DialogActivity extends Activity {
         main.name = targetName != null ? targetName : "";
         main.url = getIntent().getStringExtra("nemesis_url");
         main.sha256 = getIntent().getStringExtra("nemesis_sha256");
+        main.size = getIntent().getLongExtra("nemesis_size", -1);
         main.localZip = localPath != null ? localPath : "";
         main.isInstalled = getIntent().hasExtra("nemesis_replace");
         main.depends = getIntent().getStringExtra("nemesis_depends");

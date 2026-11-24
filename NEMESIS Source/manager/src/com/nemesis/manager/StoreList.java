@@ -37,6 +37,8 @@ final class StoreList {
         String reasons = "";
         /** Metadata 1.2 favicon, extracted by pkg-info; "" for none. */
         String favicon = "";
+        /** Zip bytes from the descriptor; -1 when unknown. */
+        long size = -1;
     }
 
     private StoreList() {

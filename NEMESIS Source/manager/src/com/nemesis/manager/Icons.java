@@ -21,7 +21,7 @@ final class Icons {
     static void set(ImageView v, String path) {
         Bitmap b = path == null || path.length() == 0 ? null : get(path);
         if (b != null) v.setImageBitmap(b);
-        else v.setImageResource(android.R.drawable.sym_def_app_icon);
+        else v.setImageResource(R.drawable.ic_app_default);
     }
 
     /** Queue jobs only know the id: the favicon last seen for it. */

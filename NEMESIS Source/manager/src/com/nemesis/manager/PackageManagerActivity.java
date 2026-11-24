@@ -238,7 +238,7 @@ public class PackageManagerActivity extends Activity {
         Row h = new Row();
         h.kind = HEAD;
         h.section = s;
-        h.title = (open[s] ? "▾  " : "▸  ") + getString(SECTIONS[s])
+        h.title = (open[s] ? "-  " : "+  ") + getString(SECTIONS[s])
                 + (items.isEmpty() ? "" : "  (" + items.size() + ")");
         out.add(h);
         if (open[s]) out.addAll(items);

@@ -68,10 +68,10 @@
                 android:layout_height="56dp" />
             <Button
                 android:id="@+id/sort_dir"
-                android:textSize="24sp"
+                android:textSize="21sp"
                 android:textColor="@color/title_btn_text"
                 android:background="@drawable/co_bt_title"
-                android:minWidth="60dp"
+                android:minWidth="100dp"
                 android:layout_width="wrap_content"
                 android:layout_height="56dp" />
             <FrameLayout
@@ -81,7 +81,8 @@
                 android:layout_width="64dp"
                 android:layout_height="56dp">
                 <ImageView
-                    android:src="@android:drawable/stat_sys_download_done"
+                    android:src="@drawable/ic_update"
+                    android:rotation="180"
                     android:contentDescription="@string/download"
                     android:layout_gravity="center"
                     android:layout_width="40dp"

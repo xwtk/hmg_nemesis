@@ -183,7 +183,7 @@ static void tunnel_leave(void) {
 
 static void guard_exit(void) {
     tunnel_leave();
-    if (!drain_reboot()) drain_swap();
+    drain_reboot();
 }
 
 void job_guard(const char *tag) {
@@ -251,8 +251,8 @@ static int read_reply(const char *path, char *out, size_t cap, int seconds) {
     return -1;
 }
 
-/* The Manager's 25 s countdown; reply gets "no", "yes" or "" (silence). swap=1 is the patched-apps text. */
-static void countdown(const char *name, int swap, char *reply, size_t cap) {
+/* The Manager's 25 s countdown; reply gets "no", "yes" or "" (silence). */
+static void countdown(const char *name, char *reply, size_t cap) {
     char rp[MAX_PATH], *argv[20]; /* 6 fixed + 4 --es triples + NULL = 19 */
     int n = 0;
     mkdir_p(REBOOT_SESSION, 0777);
@@ -268,26 +268,12 @@ static void countdown(const char *name, int swap, char *reply, size_t cap) {
     add_es(argv, &n, "nemesis_mode", "reboot_countdown");
     add_es(argv, &n, "nemesis_name", name);
     add_es(argv, &n, "session_dir", REBOOT_SESSION);
-    if (swap) add_es(argv, &n, "nemesis_swap", "1");
     argv[n++] = NULL;
-    log_msg("queue: %s countdown (%s)", swap ? "swap" : "reboot", name);
+    log_msg("queue: reboot countdown (%s)", name);
     spawn_am(argv);
     reply[0] = 0;
     read_reply(rp, reply, cap, REBOOT_PROMPT_SEC);
-    log_msg("queue: %s countdown reply '%.8s'", swap ? "swap" : "reboot", reply[0] ? reply : "(none)");
-}
-
-/* A "no" holds the swap until the next boot (boot-apply mounts it then). Without the mark, the
- * next guarded command to exit would see an empty reboot.req and swap anyway. */
-#define SWAP_HELD QUEUE_DIR "/swap.held"
-static int swap_held(void) {
-    char tok[40], held[64];
-    return boot_token(tok, sizeof(tok)) == 0 && read_file(SWAP_HELD, held, sizeof(held)) >= 32 && !strncmp(held, tok, 32);
-}
-
-static void swap_hold(void) {
-    char tok[40];
-    if (boot_token(tok, sizeof(tok)) == 0) write_file(SWAP_HELD, tok, 0644);
+    log_msg("queue: reboot countdown reply '%.8s'", reply[0] ? reply : "(none)");
 }
 
 /* Reboots when a job asked for it and nothing else is queued. The Manager
@@ -302,11 +288,10 @@ int drain_reboot(void) {
     if ((sp = strchr(val, '\n'))) *sp = 0;
     if (!val[0]) snprintf(val, sizeof(val), "reboot");
     if (framework_up()) {
-        countdown(val, 0, reply, sizeof(reply));
+        countdown(val, reply, sizeof(reply));
         if (!strncmp(reply, "no", 2)) {
             log_msg("queue: user postponed %s", val);
             reboot_req_clear();
-            swap_hold();
             return 1;
         }
         /* Work arrived during the countdown: finish it, then ask again. */
@@ -315,25 +300,6 @@ int drain_reboot(void) {
     reboot_req_clear();
     real_reboot(val);
     return 0;
-}
-
-/* Binds the outputs the jobs left in livepatch/swap. Apps that have the old file loaded are
- * force-stopped, so the user is asked first; "no" leaves the swap to the next boot. */
-void drain_swap(void) {
-    char reply[32] = "";
-    if (!lp_swap_pending() || is_file(REBOOT_REQ) || swap_held() || count_state("queued", "running") > 0) return;
-    if (framework_up() && lp_swap_running()) {
-        char app[160];
-        lp_swap_app(app, sizeof(app));
-        countdown(app, 1, reply, sizeof(reply));
-        if (!strncmp(reply, "no", 2)) {
-            log_msg("queue: user postponed the swap; it applies at the next boot");
-            swap_hold();
-            return;
-        }
-        if (count_state("queued", "running") > 0) return;
-    }
-    lp_swap_now();
 }
 
 /* ---- boot scan ---- */
@@ -435,7 +401,6 @@ static int run_job(qjob *j) {
     pid_t pid;
     int st, rc = 1;
     snprintf(seqs, sizeof(seqs), "%d", j->seq);
-    unlink(SWAP_HELD); /* new work: the next drain asks again */
     snprintf(j->state, sizeof(j->state), "running");
     boot_token(j->boot, sizeof(j->boot));
     job_save(j);
@@ -518,7 +483,7 @@ static int queue_run(void) {
         }
     for (;;) {
         while (next_queued(&j) == 0) run_job(&j);
-        if (!drain_reboot()) drain_swap();
+        drain_reboot();
         if (next_queued(&j) != 0) break;
     }
     unlink(SESSION_DIR "/ui.job");

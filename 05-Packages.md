@@ -251,7 +251,7 @@ nemesis queue delete <seq|all>
 nemesis queue list
 ```
 
-A `reboot` from a hook while a job runs does not reboot. It is held until the queue is empty. Then NEMESIS shows a 15 s countdown: **Restart now**, or **Not now** to skip the reboot. Outside a job, `reboot` and `nemesis reboot` reboot right away. Jobs that a reboot or power loss cut off are **Interrupted**. On the next boot Package Manager asks whether to continue them. One that stopped inside a script is flagged, because the unit may be half-changed.
+A `reboot` from a hook while a job runs does not reboot. It is held until the queue is empty. Then NEMESIS shows a 15 s countdown: **Restart Now**, or **Later** to skip the reboot. Outside a job, `reboot` and `nemesis reboot` reboot right away. Jobs that a reboot or power loss cut off are **Interrupted**. On the next boot Package Manager asks whether to continue them. One that stopped inside a script is flagged, because the unit may be half-changed.
 
 ### 5.4 Uninstall
 

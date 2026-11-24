@@ -116,7 +116,7 @@ The `id` is URL-encoded.
 }
 ```
 
-The server also sends the fields below, which the web page shows under Details. Manager reads only `descriptor` and `detailed-desc` from them.
+The server also sends the fields below, which the web page shows under Details. Manager reads only `descriptor`, `detailed-desc` and `size` from them. It uses `size` as the download total when the server sends no Content-Length.
 
 | Field | Type | Meaning |
 |---|---|---|

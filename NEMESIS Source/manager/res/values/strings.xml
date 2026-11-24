@@ -37,6 +37,8 @@
     <string name="search_hint">Search</string>
     <string name="sort_date">Date</string>
     <string name="sort_name">Name</string>
+    <string name="sort_asc">Ascending</string>
+    <string name="sort_desc">Descending</string>
     <string name="show_all">Show all (%d more)</string>
     <string name="show_full_only">Compatible only</string>
     <string name="empty_store">No packages to show.</string>
@@ -152,10 +154,9 @@
     <string name="confirm_resume">Some package installs were interrupted. Continue them now?</string>
     <string name="confirm_resume_unclean">Some package installs were interrupted. At least one stopped while its script was running, so the head unit may be in an unclean state: check it manually. Continue the installs now?</string>
     <string name="reboot_countdown">The packages that were installed need a restart. The head unit restarts in %d s.</string>
-    <string name="reboot_now">Restart now</string>
-    <string name="swap_countdown">Restart %1$s to apply the patch? Restarting in %2$d s.</string>
+    <string name="reboot_now">Restart Now</string>
+    <string name="later">Later</string>
     <string name="lp_damaged">LivePatch output damaged. Retry rebuilds it; Delete uninstalls the package.</string>
-    <string name="swap_now">Restart apps</string>
     <string name="reboot_busy">Packages are still being installed. Restarting now interrupts them. Really restart the head unit?</string>
     <string name="no_usb">No USB drive is connected.</string>
     <string name="usb_no_packages">The connected USB drive has no packages.</string>

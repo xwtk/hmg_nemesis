@@ -11,13 +11,13 @@ LivePatch is part of NEMESIS 1.17 and later. The packages `adb.tcp`, `wireless.p
 | Feature | What it means |
 |---------|---------------|
 | No `/system` writes | Stock files stay byte for byte as shipped. The patched copy is bind-mounted over the stock path. A new file (one the firmware does not have) is shown through a stock-directory overlay, and the directory itself is not changed. |
-| Instant rollback | Uninstall unmounts the copy. No backup or restore script is involved. |
+| Clean rollback | Uninstall unmounts the copy at the next reboot. No backup or restore script is involved. |
 | Properties without `build.prop` | `[prop.N]` sections set system properties at every boot, before zygote starts. `build.prop` is not edited. The stock value comes back when the package is gone. |
 | Boot safety net | The patches are applied by a small wrapper around zygote (`/system/bin/app_process`). If Android fails to come up several times in a row, the next boot runs stock. See [4. Safe mode](#4-safe-mode). |
 | Integrity checks | At boot, each target is checked against the stock file it was built from and against the expected output. If the firmware changed the stock file, or the output on `/data` is damaged, that target stays stock and a repair job is queued. |
 | Chains | Several packages may patch the same file. Each one is applied on top of the one installed before it. Real conflicts are refused at install with a clear reason. |
 | Re-port on uninstall | Removing a package from the middle of a chain rebuilds the rest of the chain on stock. The old output stays mounted until the new one is ready. |
-| Swap without a reboot | When the install queue finishes, the Manager offers to restart only the affected app. A reboot is needed only for native daemons a package does not name a `restart=` for. |
+| One reboot for the queue | When the install queue finishes, the Manager counts down a single reboot for every package that changed a file. `[prop.N]` changes apply at once. |
 | Cache | Results are cached on `/data` (100 MB ceiling), so installing the same package again, or the same patch on the same build, is fast. The cache is never written when `/data` is low on space. |
 | Interrupted jobs | A job cut off by a power loss shows up again in the queue. You can resume it, which skips targets that are already done, or delete it. |
 
@@ -39,7 +39,7 @@ LivePatch packages install and uninstall like any other package, through the Sto
 | `Adding <file>` | A `[file.N]` replacement or new file |
 | `Re-porting <app>` | Uninstall is rebuilding the rest of a chain |
 
-When the queue is empty, the Manager counts down **Restart <app> to apply the patch?** Answer **No** and the change is applied at the next boot. Until then the stock file stays in view.
+When the queue is empty, the Manager counts down a reboot: **Restart Now**, or **Later** to apply the change at the next boot. Until then the stock file stays in view.
 
 ### 2.2 Install errors
 
@@ -68,8 +68,6 @@ nemesis prop set <key> <value>
 nemesis prop del <key>
 ```
 
-`status` also prints `swap pending` when a restart was declined and the change waits for the next boot.
-
 ---
 
 ## 3. Writing a LivePatch package
@@ -88,8 +86,8 @@ A LivePatch package is a normal package (see [05 - Packages](05-Packages.md)) wh
 | `args` | no | `exec`: extra arguments put before the input and output paths |
 | `pack` | `dex` | Directory of the dex pack inside the package |
 | `app` | `dex` | App name in the pack, for example `Iap2ServerApp`. Letters, digits, `.`, `_`, `-`. |
-| `stop` | no | Comma list of processes to stop when the patch is swapped in, for example `com.tcc.iap2server` |
-| `restart` | no | Comma list of init services to restart on swap. A native daemon target without one asks for a reboot instead. |
+| `stop` | no | Comma list of processes to stop when the patch is applied without a reboot (`nemesis install` from the CLI), for example `com.tcc.iap2server` |
+| `restart` | no | Comma list of init services to restart when the patch is applied without a reboot (CLI) |
 | `optional` | no | `1`: skip the section when the target does not exist on this firmware, instead of refusing the install |
 
 ### 3.2 `[file.N]` — replace a file or add a new one
@@ -108,7 +106,7 @@ A replacement must be the first step on its target. A `[patch.N]` from another p
 |-----|----------|---------|
 | `key` | yes | Property name, under 96 bytes |
 | `value` | yes | Value, at most 91 bytes |
-| `restart` | no | Comma list of init services that read the property, restarted on swap |
+| `restart` | no | Comma list of init services that read the property, restarted when it is set or removed |
 
 ### 3.4 The `exec` engine
 

@@ -271,6 +271,7 @@ public class StoreActivity extends Activity {
         e.version = d.optString("package-version", "");
         e.url = d.optString("url", "");
         e.sha256 = d.optString("sha256", "");
+        e.size = d.optLong("size", -1);
         e.legacy = StoreList.isLegacy(d.optString("descriptor", ""));
         String more = d.optString("detailed-desc", "");
         if (more.length() > 0) e.detailedDesc = more;
@@ -296,7 +297,7 @@ public class StoreActivity extends Activity {
                 ? (usbMounted ? R.string.usb_no_packages : R.string.no_usb)
                 : (onlineOk ? R.string.empty_store : R.string.store_offline));
         ((Button) findViewById(R.id.sort_field)).setText(byDate ? R.string.sort_date : R.string.sort_name);
-        ((Button) findViewById(R.id.sort_dir)).setText(ascending ? "↑" : "↓");
+        ((Button) findViewById(R.id.sort_dir)).setText(ascending ? R.string.sort_asc : R.string.sort_desc);
         Button more = (Button) findViewById(R.id.show_all);
         int hidden = StoreList.hiddenCount(all);
         more.setVisibility(hidden > 0 ? View.VISIBLE : View.GONE);

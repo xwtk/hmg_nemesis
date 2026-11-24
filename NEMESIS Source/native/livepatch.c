@@ -922,19 +922,14 @@ static void after_swap(const char *target, const char *stops, const char *restar
     if (restart[0]) restart_list(restart);
 }
 
-/* Inside a queue job with Android up, the runner swaps after the queue drains (drain_swap);
- * otherwise (CLI, Android down) at once. */
+/* Inside a queue job with Android up, the apps would need a restart and some (EPP) only pick the
+ * change up after a full reboot: ask for one; boot-apply mounts the new outputs. Otherwise (CLI,
+ * Android down) at once. */
 static void lp_swap_add(const char *target, const char *stops, const char *restart) {
-    char line[MAX_PATH + 512], done[1024] = "";
+    char done[1024] = "";
     if (getenv("NEMESIS_JOB") && framework_up()) {
-        if (!restart[0] && (maps_users(target, 0) & 2)) {
-            log_msg("livepatch: %s is loaded by a native daemon; reboot to apply", target);
-            cmd_reboot(0, NULL);
-            return;
-        }
-        snprintf(line, sizeof(line), "%s\t%s\t%s\n", target, stops, restart);
-        mkdir_p(QUEUE_DIR, 0755);
-        append_file(LP_SWAP, line);
+        log_msg("livepatch: %s changed; reboot to apply", target);
+        cmd_reboot(0, NULL);
         return;
     }
     swap_one(target);
@@ -959,69 +954,6 @@ void lp_swap_flush(void) {
         if (!nl) break;
     }
     unlink(LP_SWAPJOB);
-}
-
-int lp_swap_pending(void) { return is_file(LP_SWAP); }
-
-/* 1 when a pending swap's target is mapped by an app, or a named process runs. */
-int lp_swap_running(void) {
-    static char buf[LP_MAX * 900];
-    char *p, *nl, *t, *r, *sv, *tok;
-    int hit = 0;
-    if (read_file(LP_SWAP, buf, sizeof(buf)) <= 0) return 0;
-    for (p = buf; *p && !hit; p = nl ? nl + 1 : p + strlen(p)) {
-        nl = strchr(p, '\n');
-        if (nl) *nl = 0;
-        t = strchr(p, '\t');
-        r = t ? strchr(t + 1, '\t') : NULL;
-        if (t) *t++ = 0;
-        if (r) *r++ = 0;
-        if (maps_users(p, 0)) hit = 1;
-        sv = NULL;
-        for (tok = t ? strtok_r(t, ", ", &sv) : NULL; tok && !hit; tok = strtok_r(NULL, ", ", &sv)) hit = proc_pkg(tok, 0);
-        if (r && *r) hit = 1;
-        if (!nl) break;
-    }
-    return hit;
-}
-
-/* The countdown's "Restart <app> to apply the patch?": the first pending target's file name. */
-void lp_swap_app(char *out, size_t cap) {
-    char buf[2048], *t, *dot;
-    int more;
-    snprintf(out, cap, "apps");
-    if (read_file(LP_SWAP, buf, sizeof(buf)) <= 0) return;
-    more = strchr(buf, '\n') && strchr(buf, '\n')[1];
-    buf[strcspn(buf, "\t\n")] = 0;
-    t = (char *)base_of(buf);
-    if ((dot = strrchr(t, '.')) && dot != t) *dot = 0;
-    if (more) snprintf(out, cap, "%s and others", t);
-    else snprintf(out, cap, "%s", t);
-}
-
-/* Runner side: bind every pending target, then stop what had it loaded. */
-void lp_swap_now(void) {
-    static char buf[LP_MAX * 900];
-    char done[1024] = "", *p, *nl, *t, *r;
-    int n = 0;
-    if (read_file(LP_SWAP, buf, sizeof(buf)) <= 0) return;
-    unlink(LP_SWAP);
-    for (p = buf; *p; p = nl ? nl + 1 : p + strlen(p)) {
-        nl = strchr(p, '\n');
-        if (nl) *nl = 0;
-        t = strchr(p, '\t');
-        r = t ? strchr(t + 1, '\t') : NULL;
-        if (t) *t++ = 0;
-        if (r) *r++ = 0;
-        if (*p) {
-            swap_one(p);
-            after_swap(p, t ? t : "", r ? r : "", done, sizeof(done));
-            n++;
-        }
-        if (!nl) break;
-    }
-    status_all("pending restart", "ok");
-    log_msg("livepatch: swapped %d target(s), stopped:%s", n, done[0] ? done : " none");
 }
 
 /* ---- boot-apply ---- */
@@ -2183,7 +2115,6 @@ int cmd_livepatch(int argc, char **argv) {
             parent_of(rows[i].target, d, sizeof(d));
             printf("%s %s\n", rows[i].target, lp_mounted(rows[i].target) ? "mounted" : dir_farmed(d) ? "farmed" : "unmounted");
         }
-        if (lp_swap_pending()) printf("swap pending (applies when the queue drains, or at the next boot)\n");
         return 0;
     }
     if (!strcmp(op, "selftest")) return selftest();

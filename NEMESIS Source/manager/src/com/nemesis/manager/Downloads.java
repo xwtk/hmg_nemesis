@@ -32,6 +32,7 @@ final class Downloads {
         String sha256 = "";
         String local = "";
         String favicon = "";
+        long size = -1;
         volatile int state = DL;
         volatile boolean started;
         volatile boolean done;
@@ -79,6 +80,7 @@ final class Downloads {
             it.sha256 = e.sha256 == null ? "" : e.sha256;
             it.local = e.localZip == null ? "" : e.localZip;
             it.favicon = e.favicon;
+            it.size = e.size;
             mine.add(it);
         }
         ITEMS.addAll(mine);
@@ -117,7 +119,7 @@ final class Downloads {
         it.started = false;
         it.done = false;
         it.prog[0] = 0;
-        it.prog[1] = -1;
+        it.prog[1] = it.size; // Portal replaces it with Content-Length when the server sends one
         if (it.local.length() > 0) {
             it.started = true;
             it.done = true;
@@ -231,6 +233,11 @@ final class Downloads {
             it.sha256 = p[7];
             it.local = p[8];
             it.favicon = p[9];
+            try {
+                if (p.length > 10) it.size = Long.parseLong(p[10]);
+            } catch (NumberFormatException e) {
+                it.size = -1;
+            }
             it.state = INTERRUPTED;
             ITEMS.add(it);
         }
@@ -243,7 +250,7 @@ final class Downloads {
                     .append('\t').append(it.risk ? 1 : 0).append('\t').append(clean(it.id))
                     .append('\t').append(clean(it.name)).append('\t').append(clean(it.url))
                     .append('\t').append(clean(it.sha256)).append('\t').append(clean(it.local))
-                    .append('\t').append(clean(it.favicon)).append('\n');
+                    .append('\t').append(clean(it.favicon)).append('\t').append(it.size).append('\n');
         }
         File f = new File(c.getFilesDir(), JOURNAL);
         File tmp = new File(c.getFilesDir(), JOURNAL + ".tmp");
