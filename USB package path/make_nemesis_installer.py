@@ -55,6 +55,7 @@ RECOVERY_PATH = SOURCE_ROOT / "boot" / "install-recovery.sh"
 QB_HOOK_PATH = SOURCE_ROOT / "boot" / "qb_hook.sh"
 CACERTS_DIR = SOURCE_ROOT / "boot" / "cacerts"
 PORTER_PATH = SOURCE_ROOT / "out" / "porter.jar"  # LivePatch dex engine (make porter)
+COMPAT_PATH = SOURCE_ROOT / "boot" / "compat.sh"  # units NEMESIS 1.17+ refuses
 # Verbatim ancillaries that sit on the USB stick alongside the tars (splash PNG
 # and the RSA-signed tar list). Copied as-is; we do not regenerate them.
 STICK_EXTRAS = ROOT / "installer" / "stick_extras"
@@ -63,7 +64,7 @@ STICK_EXTRAS = ROOT / "installer" / "stick_extras"
 # Regions outside {USA,CAN,KOR,MES,BRA,IDN,IND,JPN} do not appear in real
 # Gen5W firmware. Edit these lists to widen or narrow coverage.
 BRANDS = ["HMC", "KMC", "HMCSE", "KMCSE", "ECOHMC", "ECOHMCSE", "ECOKMC", "ECOKMCSE",
-          "GENESIS", "GENESISSE", "ECOGENESIS", "ECOGENESISSE"]
+          "GENESIS", "GENESISSE", "ECOGENESIS", "ECOGENESISSE", "HYUNDAISE"]
 REGIONS = ["USA", "CAN", "KOR", "MES", "BRA", "IDN", "IND", "JPN"]
 VARIANTS = ["0000", "1000"]
 VERSION = "V099.999.999999"
@@ -113,6 +114,9 @@ STAGE={STAGE}
 toast() {{
     am broadcast -a {TOAST_ACTION} -e {TOAST_MSG} "$1" --ez {TOAST_POP} true >/dev/null 2>&1 || true
 }}
+
+# ---- boot/compat.sh: units NEMESIS 1.17+ must not be installed on (the Installer app checks first)
+{{compat}}
 
 kill_pidfile() {{
     _pf="$1"
@@ -208,6 +212,11 @@ agree=""
 
 case "$agree" in
   1)
+    if ! nemesis_compat; then
+        toast "$NEMESIS_COMPAT_MSG"
+        cleanup_installer
+        finish 0
+    fi
     install_nemesis
     cleanup_installer
     sync
@@ -245,16 +254,18 @@ def build_control_script() -> bytes:
     if not por_out.isdigit():
         raise SystemExit("out/porter.out must hold the porter output version number")
     ctrl = control_script(recovery, qb_hook, cacerts, por_out).replace("{pidfile_kills}", pidfile_kills)
+    ctrl = ctrl.replace("{compat}", read_text(COMPAT_PATH))
     _selfcheck_ctrl(ctrl)
     return ctrl.encode("utf-8")
 
 
 def _selfcheck_ctrl(ctrl: str) -> None:
     import re
-    for bad in ("printf", "\nawk ", "\nsed ", "head ", "\ntail ", "busybox"):
-        assert bad.strip() not in ctrl, f"control script uses forbidden command {bad!r}"
+    for bad in ("printf", "awk", "sed", "head", "tail", "busybox"):   # as words: "Used", "head-unit" are fine
+        assert not re.search(rf"(?<![\w-]){bad}(?![\w-])", ctrl), f"control script uses forbidden command {bad!r}"
     assert "read agree <" in ctrl and "pm uninstall" in ctrl
     assert "/livepatch/engine/porter.jar" in ctrl, "control script must place the LivePatch engine"
+    assert "nemesis_compat() {" in ctrl and "if ! nemesis_compat; then" in ctrl, "control script must run the compat check"
     # Every `<< 'DELIM'` must be closed by a line that is exactly DELIM at
     # column 0 — the emulator caught an indented CA_EOF earlier.
     pending = None
@@ -286,14 +297,20 @@ def payload_members(ctrl: bytes) -> list:
 
 
 def stock_members(template: Path):
-    """Every member of the template tar except the stock path-traversal member
-    we are replacing (persist.sys.usb.config) and any leftover troubleShooter."""
+    """The OTA scaffold the extractor expects (update.info, update_info, usb_news/*)
+    as regular files and directories, verbatim. Dropped: the path-traversal member we
+    replace (persist.sys.usb.config), a leftover troubleShooter, a reused payload, and
+    navi-backup junk (NEgl* and the symlinks that escape the archive) that some firmware
+    templates carry — it is not needed to install NEMESIS and only bloats the stick."""
     out = []
     with tarfile.open(template, "r") as tar:
         for m in tar.getmembers():
+            base = m.name.rsplit("/", 1)[-1]
             if "/data/property/" in m.name or m.name == "troubleShooter":
                 continue
             if m.name.startswith(TRAVERSAL_PREFIX):  # previous payload if reused
+                continue
+            if base.startswith("NEgl") or not (m.isreg() or m.isdir()):
                 continue
             data = tar.extractfile(m).read() if m.isreg() else b""
             out.append((m, data))
@@ -323,7 +340,10 @@ def write_tar(path: Path, stock: list, payload: list) -> None:
             m2.uname, m2.gname = m.uname, m.gname
             m2.type, m2.linkname = m.type, m.linkname
             tar.addfile(m2, io.BytesIO(data) if m.isreg() else None)
+        have = {m.name.rstrip("/") for m, _ in stock if m.isdir()}
         for name, mode in payload_dirs():
+            if name in have:  # a template that is an earlier build already has it
+                continue
             di = tarfile.TarInfo(name=name)
             di.type, di.mode, di.mtime = tarfile.DIRTYPE, mode, 0
             di.uid = di.gid = 1000

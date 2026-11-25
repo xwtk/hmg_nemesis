@@ -1,6 +1,9 @@
 package com.nemesis.installer;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.TypedValue;
@@ -12,7 +15,9 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 /** The NEMESIS Installation Interface: a warning the user confirms or declines.
@@ -33,6 +38,105 @@ public class InstallerActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(buildUi());
+        int refused = Compat.check(this);
+        if (refused != 0) {
+            // The root script checks again; Decline's cleanup runs once the owner has read why.
+            new AlertDialog.Builder(this)
+                    .setMessage(refused)
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface d, int w) {
+                            submit(false);
+                        }
+                    })
+                    .show();
+        }
+    }
+
+    /** boot/compat.sh in Java, as far as an app can see: HMG-API's /data is root-only, so its
+     *  version is its app's. Returns the refusal's message, or 0. */
+    static final class Compat {
+        static final String HMGAPI_MIN = "1.1.0-rc.9";
+        private static final String WRAPPER = "#!/system/bin/sh\n# NEMESIS LivePatch";
+        private static final String[] NEED = {"/system/bin/linker",
+                "com.android.internal.os.ZygoteInit", "NO_ADDR_COMPAT_LAYOUT_FIXUP"};
+        private static final String[] DENY = {"app_process.", "LD_PRELOAD", "/data/",
+                "hmgapi", "HMG-API", "leafia", "Leafia", "xposed", "Xposed"};
+
+        static int check(Context c) {
+            String v = null;
+            boolean hmgapi = new File("/system/bin/hmgapid").exists();
+            try {
+                v = c.getPackageManager().getPackageInfo("hmgapi.app", 0).versionName;
+                hmgapi = true;
+            } catch (Exception e) {
+                // not installed
+            }
+            if (hmgapi) {
+                return v == null || older(v, HMGAPI_MIN) ? R.string.compat_hmgapi : 0;
+            }
+            return stockAppProcess("/system/bin") ? 0 : R.string.compat_app_process;
+        }
+
+        /** dir/app_process, or the binary behind NEMESIS's LivePatch wrapper, is the AOSP one. */
+        static boolean stockAppProcess(String dir) {
+            String b = read(dir + "/app_process");
+            if (b != null && b.startsWith(WRAPPER)) b = read(dir + "/app_process.real");
+            if (b == null) return false;
+            if (b == null) return false;
+            for (String s : NEED) if (!b.contains(s)) return false;
+            for (String s : DENY) if (b.contains(s)) return false;
+            return true;
+        }
+
+        /** a is an older version than b (release > rc > beta > alpha). */
+        static boolean older(String a, String b) {
+            int[] x = key(a), y = key(b);
+            for (int i = 0; i < 5; i++) {
+                if (x[i] != y[i]) return x[i] < y[i];
+            }
+            return false;
+        }
+
+        private static int[] key(String v) {
+            int dash = v.indexOf('-');
+            String core = dash < 0 ? v : v.substring(0, dash);
+            String[] c = core.split("\\.");
+            int[] k = new int[5];
+            for (int i = 0; i < 3; i++) k[i] = i < c.length ? num(c[i]) : 0;
+            if (dash < 0) {
+                k[3] = 9;
+            } else {
+                String pre = v.substring(dash + 1);
+                int dot = pre.indexOf('.');
+                String t = dot < 0 ? pre : pre.substring(0, dot);
+                k[3] = t.equals("rc") ? 3 : t.equals("beta") ? 2 : t.equals("alpha") ? 1 : 0;
+                k[4] = dot < 0 ? 0 : num(pre.substring(dot + 1));
+            }
+            return k;
+        }
+
+        private static int num(String s) {
+            return s.matches("[0-9]{1,9}") ? Integer.parseInt(s) : 0;
+        }
+
+        /** The file's bytes as Latin-1 (one char per byte), or null. */
+        private static String read(String path) {
+            File f = new File(path);
+            if (!f.isFile() || f.length() > (8 << 20)) return null;
+            byte[] b = new byte[(int) f.length()];
+            try {
+                DataInputStream in = new DataInputStream(new FileInputStream(f));
+                try {
+                    in.readFully(b);
+                } finally {
+                    in.close();
+                }
+                return new String(b, "ISO-8859-1");
+            } catch (Exception e) {
+                return null;
+            }
+        }
     }
 
     private View buildUi() {

@@ -35,6 +35,7 @@ RECOVERY_PATH = SOURCE_ROOT / "boot" / "install-recovery.sh"
 QB_HOOK_PATH = SOURCE_ROOT / "boot" / "qb_hook.sh"
 CACERTS_DIR = SOURCE_ROOT / "boot" / "cacerts"
 PORTER_PATH = SOURCE_ROOT / "out" / "porter.jar"  # LivePatch dex engine (make porter)
+COMPAT_PATH = SOURCE_ROOT / "boot" / "compat.sh"  # units NEMESIS 1.17+ refuses
 
 
 def bootstrap_script(elf_skip: int, elf_len: int, apk_skip: int, apk_len: int,
@@ -77,6 +78,24 @@ sleep 1
 am broadcast -a {TOAST_ACTION} \\
   -e {TOAST_MSG_EXTRA} "Welcome to NEMESIS." \\
   --ez {TOAST_POPUP_EXTRA} true 2>&1 || true
+
+# ---- boot/compat.sh: units NEMESIS 1.17+ must not be installed on
+{{compat}}
+if ! nemesis_compat; then
+    sleep 2
+    am broadcast -a {TOAST_ACTION} \\
+      -e {TOAST_MSG_EXTRA} "$NEMESIS_COMPAT_MSG" \\
+      --ez {TOAST_POPUP_EXTRA} true 2>&1 || true
+    # nothing changed; the OTA stops here (its validation fails), its files go from /data
+    cat > /data/nemesis/ota-finish.sh << 'END'
+#!/system/bin/sh
+sleep 5
+rm -rf /storage/upgrade/*
+sync
+END
+    chmod 755 /data/nemesis/ota-finish.sh
+    exec /data/nemesis/ota-finish.sh
+fi
 
 sleep 2
 am broadcast -a {TOAST_ACTION} \\
@@ -171,10 +190,14 @@ def main() -> None:
     cacerts = cacerts_heredocs(CACERTS_DIR)
     elf = ELF_PATH.read_bytes()
     apk = APK_PATH.read_bytes()
-    por = PORTER_PATH.read_bytes() if PORTER_PATH.is_file() else b""
-    por_out = PORTER_PATH.with_name("porter.out").read_text().strip() if por else ""
-    if por and not por_out.isdigit():
+    if not PORTER_PATH.is_file():
+        raise SystemExit(f"missing {PORTER_PATH} (make porter): LivePatch needs it")
+    por = PORTER_PATH.read_bytes()
+    por_out = PORTER_PATH.with_name("porter.out").read_text().strip()
+    if not por_out.isdigit():
         raise SystemExit("out/porter.out must hold the porter output version number")
+    compat = COMPAT_PATH.read_text(encoding="utf-8")
+    assert "nemesis_compat() {" in compat
 
     align = 4096
     elf_skip = 0
@@ -182,7 +205,7 @@ def main() -> None:
     for _ in range(8):
         apk_skip = elf_skip + len(elf)
         script = bootstrap_script(elf_skip, len(elf), apk_skip, len(apk), recovery, qb_hook, cacerts,
-                                  apk_skip + len(apk), len(por), por_out)
+                                  apk_skip + len(apk), len(por), por_out).replace("{compat}", compat)
         hdr = script.encode("utf-8")
         if not hdr.endswith(b"\n"):
             hdr += b"\n"

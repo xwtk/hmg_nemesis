@@ -46,6 +46,10 @@ public class StoreActivity extends Activity {
     private boolean ascending;
     private int loadGen;
     private int resolveGen;
+    /** "Retrieving data…" until the stick, the catalog and every row's descriptor are in. */
+    private boolean usbLoaded;
+    private boolean onlineLoaded;
+    private boolean resolving;
     /** Opened by a list stick: its popup goes first, and online being down is no news. */
     /** The stick's one package update check, spent on the first load. */
     private boolean usbLaunchCheck;
@@ -139,6 +143,9 @@ public class StoreActivity extends Activity {
     /** The stick answers at once; the portal may take its whole connect timeout. */
     private void load() {
         final int gen = ++loadGen;
+        usbLoaded = false;
+        onlineLoaded = false;
+        refresh();
         new Thread(new Runnable() {
             public void run() {
                 Map<String, String> info = Cli.fields(Cli.run("usb-info"));
@@ -148,6 +155,7 @@ public class StoreActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (gen != loadGen || isFinishing()) return;
+                        usbLoaded = true;
                         usbMounted = mounted;
                         usbOk = !rows.isEmpty();
                         usbRoot = root;
@@ -166,6 +174,7 @@ public class StoreActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     public void run() {
                         if (gen != loadGen || isFinishing()) return;
+                        onlineLoaded = true;
                         onlineOk = onlineFinal != null;
                         onlineRows = onlineOk ? onlineFinal : new ArrayList<StoreList.Entry>();
                         if (!usbTab) {
@@ -214,6 +223,7 @@ public class StoreActivity extends Activity {
     /** Listing uses only the supply data; compatibility comes from each descriptor. */
     private void resolve(final int gen, final List<StoreList.Entry> rows, final boolean usb,
                          final String root) {
+        resolving = true;
         new Thread(new Runnable() {
             public void run() {
                 for (int i = 0; i < rows.size() && gen == resolveGen; i++) {
@@ -224,12 +234,14 @@ public class StoreActivity extends Activity {
                     } catch (Throwable t) {
                         CrashLog.note("update.log", "descriptor " + e.name + ": " + t);
                     }
-                    runOnUiThread(new Runnable() {
-                        public void run() {
-                            if (gen == resolveGen && !isFinishing()) refresh();
-                        }
-                    });
                 }
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (gen != resolveGen || isFinishing()) return;
+                        resolving = false;
+                        refresh();
+                    }
+                });
             }
         }).start();
     }
@@ -288,12 +300,15 @@ public class StoreActivity extends Activity {
 
     private void refresh() {
         String q = ((EditText) findViewById(R.id.search)).getText().toString();
-        shown = StoreList.view(all, q, showAll, byDate, ascending);
+        boolean loading = (usbTab ? !usbLoaded : !onlineLoaded) || resolving;
+        // While loading the list stays empty, so the empty view shows the spinner instead of a half list.
+        shown = loading ? new ArrayList<StoreList.Entry>() : StoreList.view(all, q, showAll, byDate, ascending);
         adapter.notifyDataSetChanged();
         tab(R.id.tab_usb, usbTab);
         tab(R.id.tab_online, !usbTab);
+        findViewById(R.id.loading_spin).setVisibility(loading ? View.VISIBLE : View.GONE);
         // Why the tab is empty, in place of the old popup.
-        ((TextView) findViewById(R.id.empty)).setText(usbTab
+        ((TextView) findViewById(R.id.empty_text)).setText(loading ? R.string.store_retrieving : usbTab
                 ? (usbMounted ? R.string.usb_no_packages : R.string.no_usb)
                 : (onlineOk ? R.string.empty_store : R.string.store_offline));
         ((Button) findViewById(R.id.sort_field)).setText(byDate ? R.string.sort_date : R.string.sort_name);

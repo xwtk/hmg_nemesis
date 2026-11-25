@@ -34,6 +34,13 @@ For the USB update package entrypoint (variant 2), use `USB package path/` inste
 
 MAP_PREPARE `execl`s `/storage/upgrade/troubleShooter` as **uid 0 / gid system** **before** RSA validation. See document 01.
 
+### Units NEMESIS 1.17 and later refuse
+
+LivePatch replaces `/system/bin/app_process` with its own wrapper, so 1.17+ does not install on a unit where another tool has already changed that file. Every route checks first and stops without changing anything: the troubleshooter, the USB package (the Installer app shows the reason before **Proceed**, and its root script checks again), and the core update (`scripts/migrate.sh` fails and the previous version is put back). The rules are in `boot/compat.sh`. The Installer app has a Java copy of them, and `tests/compat_test.sh` checks that both agree.
+
+- **HMG-API older than 1.1.0-rc.9** (version from `/data/hmgapi/installed.txt`, or the `hmgapi.app` version in the app), or HMG-API of unknown version: *"NEMESIS 1.17 and later are not compatible with your HMG-API version, update it or uninstall to continue installation."* From rc.9 on, HMG-API works under LivePatch's wrapper.
+- **No HMG-API, and `app_process` is not stock**: *"NEMESIS 1.17 and later utilize a critical system component (app_process binary) for additional features, which has been modified, restore it to factory state to continue installation."* When NEMESIS's own wrapper is in place, the check reads `app_process.real` instead. The unit keeps no list of its build's files, so "stock" means what every build's binary is: the dynamic AOSP `app_process` that starts `ZygoteInit` (it names `/system/bin/linker`, `com.android.internal.os.ZygoteInit` and `NO_ADDR_COMPAT_LAYOUT_FIXUP`). It must also name nothing a wrapper would: another `app_process.*`, `LD_PRELOAD`, `/data/`, HMG-API, Leafia or Xposed. A patch that changes the binary's code and adds none of these strings would pass.
+
 ### Overlay (NEMESIS already running)
 
 The installer:
@@ -130,7 +137,7 @@ A factory **system image** flash also removes `/system/xbin/nemesis` and the APK
 An update replaces the core files without a DSP OTA. It comes from a stick (`type=update`), from **Settings → Check for updates**, or from a shell:
 
 ```sh
-/system/xbin/nemesis update /storage/usb0/nemesis-update-1.17.zip
+/system/xbin/nemesis update /storage/usb0/nemesis-update-1.17.1.zip
 ```
 
 Each GitHub Release attaches a ready update bundle (`nemesis-update-<version>.zip`) alongside a minimal `NEMESIS.data` — copy both to the root of the drive. The `NEMESIS.data` is only:
@@ -145,12 +152,14 @@ path=nemesis-1.16.7.zip
 Build the zip on the PC from the `NEMESIS Source/` folder:
 
 ```bash
-python3 tools/make_update_zip.py -o nemesis-update-1.17.zip --version 1.17 --no-qb-hook
+python3 tools/make_update_zip.py -o nemesis-update-1.17.1.zip --version 1.17.1 --no-qb-hook
 ```
 
 `--no-qb-hook` leaves out `core/qb_hook.sh`. An update runs the binary already on the unit, and on real units 1.16 and 1.16.1 fail when they rewrite the hook, so a zip meant for them must not carry it.
 
-The zip has `id=nemesis.core`, `type=update`, and a `package-version`. It holds `core/nemesis`, optionally `core/NEMESIS.apk`, `core/install-recovery.sh`, `core/qb_hook.sh`, `core/cacerts/`, `core-packages/*.zip`, and `scripts/migrate.sh`, plus an `MD5SUMS` that must list every file.
+The zip has `id=nemesis.core`, `type=update`, and a `package-version`. It holds `core/nemesis`, `core/porter.jar` and `core/porter.out` (the LivePatch dex engine), `scripts/migrate.sh` and `scripts/compat.sh`, optionally `core/NEMESIS.apk`, `core/install-recovery.sh`, `core/qb_hook.sh`, `core/cacerts/` and `core-packages/*.zip`, plus an `MD5SUMS` that must list every file.
+
+The update runs the updater of the version already on the unit. Updaters before 1.17 do not know `core/porter.*`, so `scripts/migrate.sh` (from `boot/migrate.sh` unless `--migrate` names another script) places them in `/data/nemesis/livepatch/engine`. Before that it runs the check in `scripts/compat.sh` ([units 1.17+ refuses](#units-nemesis-117-and-later-refuse)) and exits non-zero on a refused unit, so the previous version is put back. A `--migrate` of your own must do both, or LivePatch packages with a dex patch fail with "LivePatch engine missing" on units updated from 1.16.x. The build stops when `out/porter.jar` is missing (`make porter`).
 
 What it does:
 

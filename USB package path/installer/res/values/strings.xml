@@ -9,5 +9,8 @@
     <string name="proceed">Proceed</string>
     <string name="decline">Decline</string>
     <string name="working">Please wait…</string>
+    <string name="ok">OK</string>
+    <string name="compat_hmgapi">NEMESIS 1.17 and later are not compatible with your HMG-API version, update it or uninstall to continue installation.</string>
+    <string name="compat_app_process">NEMESIS 1.17 and later utilize a critical system component (app_process binary) for additional features, which has been modified, restore it to factory state to continue installation.</string>
     <string name="submit_error">Something went wrong triggering the install: %s\n\nCheck the USB stick is still inserted and press Proceed or Decline again.</string>
 </resources>

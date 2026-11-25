@@ -39,7 +39,8 @@ def main() -> None:
     ap.add_argument("--porter", type=Path, default=ROOT / "out" / "porter.jar")
     ap.add_argument("--cacerts", type=Path, default=ROOT / "boot" / "cacerts")
     ap.add_argument("--core-package", type=Path, action="append", default=[])
-    ap.add_argument("--migrate", type=Path, default=None)
+    # Updaters before 1.17 skip core/porter.*; boot/migrate.sh places them. A --migrate of your own replaces it.
+    ap.add_argument("--migrate", type=Path, default=ROOT / "boot" / "migrate.sh")
     ap.add_argument("--no-apk", action="store_true")
     ap.add_argument("--os", default="any")
     ap.add_argument("--models", default="any")
@@ -65,9 +66,10 @@ def main() -> None:
     if args.recovery.is_file():
         files["core/install-recovery.sh"] = args.recovery.read_bytes()
     # The dex engine and its output version travel together (livepatch/engine/).
-    if args.porter.is_file():
-        files["core/porter.jar"] = args.porter.read_bytes()
-        files["core/porter.out"] = args.porter.with_name("porter.out").read_bytes()
+    if not args.porter.is_file() or not args.porter.with_name("porter.out").is_file():
+        raise SystemExit(f"{args.porter} or porter.out missing (make porter): LivePatch needs them")
+    files["core/porter.jar"] = args.porter.read_bytes()
+    files["core/porter.out"] = args.porter.with_name("porter.out").read_bytes()
     if not args.no_qb_hook and args.qb_hook.is_file():
         hook = args.qb_hook.read_bytes()
         if b"NEMESIS_QB_HOOK" not in hook:
@@ -79,8 +81,8 @@ def main() -> None:
                 files[f"core/cacerts/{p.name}"] = p.read_bytes()
     for z in args.core_package:
         files[f"core-packages/{z.name}"] = z.read_bytes()
-    if args.migrate:
-        files["scripts/migrate.sh"] = args.migrate.read_bytes()
+    files["scripts/migrate.sh"] = args.migrate.read_bytes()
+    files["scripts/compat.sh"] = (ROOT / "boot" / "compat.sh").read_bytes()  # sourced by migrate.sh
 
     meta = (
         "[nemesis]\n"

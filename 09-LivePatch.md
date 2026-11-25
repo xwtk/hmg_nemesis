@@ -91,8 +91,8 @@ A LivePatch package is a normal package (see [05 - Packages](05-Packages.md)) wh
 | `args` | no | `exec`: extra arguments put before the input and output paths |
 | `pack` | `dex` | Directory of the dex pack inside the package |
 | `app` | `dex` | App name in the pack, for example `Iap2ServerApp`. Letters, digits, `.`, `_`, `-`. |
-| `stop` | no | Comma list of processes to stop when the patch is applied without a reboot (`nemesis install` from the CLI), for example `com.tcc.iap2server` |
-| `restart` | no | Comma list of init services to restart when the patch is applied without a reboot (CLI) |
+| `stop` | no | Comma list of processes to stop when the patch is applied while Android runs, for example `com.tcc.iap2server`. Only `nemesis livepatch repair` does that: an install or uninstall with Android up asks for a reboot instead, and with Android down nothing needs stopping. |
+| `restart` | no | Comma list of init services to restart when the patch is applied while Android runs (`nemesis livepatch repair`, as for `stop`) |
 | `optional` | no | `1`: skip the section when the target does not exist on this firmware, instead of refusing the install |
 
 ### 3.2 `[file.N]` — replace a file or add a new one
