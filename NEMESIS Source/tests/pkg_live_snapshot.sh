@@ -7,6 +7,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOGGLE_PKG=$ROOT/examples/adb-toggle/package
+if [ ! -d "$TOGGLE_PKG" ]; then
+    echo "skip pkg_live_snapshot: examples/adb-toggle is not in the public tree"
+    exit 0
+fi
 
 if [ "${NEMESIS_HOOK_NS:-}" != 1 ]; then
     if ! command -v unshare >/dev/null 2>&1; then

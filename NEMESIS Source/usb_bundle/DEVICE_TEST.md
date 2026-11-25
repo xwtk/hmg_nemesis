@@ -15,10 +15,10 @@ Stock apps are not modified. There is no All Apps tile.
 ## Build / verify (PC)
 
 ```bash
-cd path/to/nemesis   # the repository root (Sources/ in the published repo)
+cd path/to/nemesis   # "NEMESIS Source/" in the published repo
 make
 sh usb_bundle/validate_system_tools.sh
-sh usb_bundle/verify_tars.sh
+make -C "../USB OTA troubleShooter path" verify   # after its `make` built the tar
 ```
 
 ## USB layout (root install)

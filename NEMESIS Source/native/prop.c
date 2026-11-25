@@ -1,5 +1,5 @@
 /* Property writer (resetprop-style) and the [prop.N] store of LivePatch.
- * Edits the 4.4 trie property area in place. LIVEPATCH_PLAN.md, "Props". */
+ * Edits the 4.4 trie property area in place. Package syntax: 09-LivePatch.md, 3.3. */
 #include "nemesis.h"
 #include <stdint.h>
 #include <sys/mman.h>

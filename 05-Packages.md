@@ -184,9 +184,9 @@ mode=restart
 
 Scripts must be `#!/system/bin/sh` and toolbox-only. Prefer `nemesis remount rw` / `nemesis remount ro` to change `/system`. Toolbox `mount -o remount,rw /system` returns `Operation not permitted` on this unit even as uid 0 (the kernel refuses a remount that would drop `nosuid`). Hooks and `nemesis root` put `/data/nemesis/bin` first on `PATH`, so a bare `mount -o remount,rw /system` in a hook is wrapped. You can still `export PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin` for other tools.
 
-Worked examples in the source tree: `examples/package-hello/`, `examples/package-hello-v2/` (`mode=background` on v2), `packages/usb-handler/`, `packages/adb-tcp/`, `packages/wireless-projection/`, `packages/projection-tbt/`.
+Worked examples in the source tree: `examples/package-hello/`, `examples/package-hello-v2/` (`mode=background` on v2), `packages/usb-handler/`, `packages/adb-tcp/`, `packages/wireless-projection/`.
 
-Packages that change files or properties already on the head unit (`adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session`, `enhanced.projection`) do it with LivePatch: `[patch.N]`, `[file.N]` and `[prop.N]` sections in `NEMESIS.data`. `/system` is not written, and no hook backs up or restores live files. See [09 - LivePatch](09-LivePatch.md). Their 1.x releases edited `/system` in place and kept a copy in `/data/nemesis/backup/<id>/`. The 2.x `preinstall` refuses to install while that backup exists, so uninstall the 1.x copy first. `projection.tbt` and `carplay.session` are built for firmware 260507.
+Packages that change files or properties already on the head unit (`adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `carplay.session`, `enhanced.projection`) do it with LivePatch: `[patch.N]`, `[file.N]` and `[prop.N]` sections in `NEMESIS.data`. `/system` is not written, and no hook backs up or restores live files. See [09 - LivePatch](09-LivePatch.md). Their 1.x releases edited `/system` in place and kept a copy in `/data/nemesis/backup/<id>/`. The 2.x `preinstall` refuses to install while that backup exists, so uninstall the 1.x copy first. `carplay.session` is built for firmware 260507. `projection.tbt` is deprecated and removed; `enhanced.projection` covers it.
 
 ### 5.2 Zip
 

@@ -8,9 +8,9 @@ DSP OTA drops a single `troubleShooter` member. That script installs the SUID
 ## Install
 
 ```bash
-cd path/to/nemesis   # the repository root (Sources/ in the published repo)
+cd path/to/nemesis   # "NEMESIS Source/" in the published repo
 make
-sh usb_bundle/verify_tars.sh
+make -C "../USB OTA troubleShooter path" verify   # after its `make` built the tar
 ```
 
 Copy `ota_package.tar` (same bytes as `ota_package_troubleshooter.tar`) to USB →
@@ -66,4 +66,4 @@ removes locked packages and deletes the CLI. Stock apps are not touched.
 | `ota_package_troubleshooter.tar` | Same payload, explicit name |
 | `uninstall_nemesis.sh` | `nemesis wipe --confirm` |
 | `open-manager/NEMESIS.data` | USB stick that opens Manager (`type=open`) |
-| `verify_tars.sh` / `validate_system_tools.sh` | Host checks |
+| `validate_system_tools.sh` | Host check (the tar check is `verify_tars.sh` in `USB OTA troubleShooter path/`) |

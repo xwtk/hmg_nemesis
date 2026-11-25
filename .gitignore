@@ -20,3 +20,33 @@ USB package path/installer/nemesis.keystore
 **/__pycache__/
 *.pyc
 
+# Kept out of the public tree on purpose: firmware-derived files (patched or stock head-unit
+# apps and libraries), third-party binaries, unreleased packages and private dev notes.
+# The Makefile and tests skip what is missing here.
+NEMESIS Source/LIVEPATCH_PLAN.md
+NEMESIS Source/LIVEPATCH_TODO.md
+NEMESIS Source/livepatch-proto/
+NEMESIS Source/examples/adb-toggle/
+NEMESIS Source/examples/usb-stick-logger/
+NEMESIS Source/examples/*/packages/
+NEMESIS Source/packages/busybox/
+NEMESIS Source/packages/carplay.session/
+NEMESIS Source/packages/door-volume/
+NEMESIS Source/packages/hu-logger/
+NEMESIS Source/packages/voicehandler-vr-gates/
+NEMESIS Source/packages/enhanced.projection/bin/cpatch
+NEMESIS Source/packages/enhanced.projection/files/lib*.so
+NEMESIS Source/packages/enhanced.projection/files/patched/
+NEMESIS Source/packages/enhanced.projection/files/dex/
+NEMESIS Source/packages/enhanced.projection/files/porter/
+NEMESIS Source/tests/door_volume.sh
+NEMESIS Source/tests/emu_nemesis_flow.*
+NEMESIS Source/tests/emu_coexist/
+NEMESIS Source/tests/gexec.py
+NEMESIS Source/tests/guest.py
+NEMESIS Source/tests/pkg_carplay_session.sh
+NEMESIS Source/tests/pkg_enhanced_projection.sh
+NEMESIS Source/tests/qb_runtime.stock.sh
+NEMESIS Source/usb_bundle/ota_package*.tar
+NEMESIS Source/usb_bundle/verify_tars.sh
+

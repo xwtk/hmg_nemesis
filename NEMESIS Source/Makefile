@@ -26,13 +26,17 @@ packages: native
 	python3 tools/make_nemesis_package.py packages/usb-handler -o out/usb-handler.zip
 	python3 tools/make_nemesis_package.py examples/package-hello -o out/hello.tool.zip
 	python3 tools/make_nemesis_package.py examples/package-hello-v2 -o out/hello.tool-v2.zip
-	python3 tools/make_nemesis_package.py packages/voicehandler-vr-gates -o out/voicehandler.vr-gates.zip
 	python3 tools/make_nemesis_package.py packages/adb-tcp -o out/adb.tcp.zip
 	python3 tools/make_nemesis_package.py packages/wireless-projection -o out/wireless.projection.zip
-	python3 tools/make_nemesis_package.py packages/busybox -o out/busybox.zip
 	cp -f out/hello.tool.zip examples/usb-stick-install/packages/hello.tool.zip
-	mkdir -p examples/usb-stick-voicehandler-vr-gates/packages
-	cp -f out/voicehandler.vr-gates.zip examples/usb-stick-voicehandler-vr-gates/packages/voicehandler.vr-gates.zip
+	# private packages (.gitignore), absent in a public clone
+	if [ -d packages/busybox ]; then python3 tools/make_nemesis_package.py packages/busybox -o out/busybox.zip; \
+	else echo "skip busybox (not in the public tree)"; fi
+	if [ -d packages/voicehandler-vr-gates ]; then \
+		python3 tools/make_nemesis_package.py packages/voicehandler-vr-gates -o out/voicehandler.vr-gates.zip && \
+		mkdir -p examples/usb-stick-voicehandler-vr-gates/packages && \
+		cp -f out/voicehandler.vr-gates.zip examples/usb-stick-voicehandler-vr-gates/packages/voicehandler.vr-gates.zip; \
+	else echo "skip voicehandler-vr-gates (not in the public tree)"; fi
 	mkdir -p examples/usb-stick-adb/packages examples/usb-stick-wireless/packages
 	cp -f out/adb.tcp.zip examples/usb-stick-adb/packages/adb.tcp.zip
 	cp -f out/wireless.projection.zip examples/usb-stick-wireless/packages/wireless.projection.zip

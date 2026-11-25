@@ -36,7 +36,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
-/** xwtk.Portal over HTTPS. Endpoints are described in NEMESIS-API.md. */
+/** xwtk.Portal over HTTPS. Endpoints are described in 07-Cloud-Store-API.md (repository root). */
 final class Portal {
     /** Placeholder: nothing resolves here until the real host is filled in. */
     private static final String NET_PREFS = "network";

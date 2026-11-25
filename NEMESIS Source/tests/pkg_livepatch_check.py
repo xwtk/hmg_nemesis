@@ -4,7 +4,7 @@ usage: python3 tests/pkg_livepatch_check.py   (exit 1 if any package has a probl
 import os, re, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PKGS = ["adb-tcp", "wireless-projection", "voicehandler-vr-gates", "enhanced.projection", "projection-tbt", "carplay.session"]
+PKGS = ["adb-tcp", "wireless-projection", "voicehandler-vr-gates", "enhanced.projection", "carplay.session"]
 # Not on the unit (.cursor/rules/hu-shell.mdc). Matched as a command word, not inside strings like "--preopt".
 BANNED = "printf awk sed head tail wc od find xargs cut tr sort uniq expr basename dirname busybox toybox md5sum".split()
 CMD = re.compile(r"(?:^|[;&|(]|\bthen|\bdo|\belse|\$\()\s*(" + "|".join(BANNED) + r")\b", re.M)
@@ -26,8 +26,10 @@ def ini(path):
 
 
 def private(path):
-    """Files kept out of the published tree (.git/info/exclude) are absent there; that is not a defect."""
-    return subprocess.run(["git", "-C", ROOT, "check-ignore", "-q", path], capture_output=True).returncode == 0
+    """Files kept out of the published tree (.gitignore) are absent there; that is not a defect."""
+    # an absent path is not known to be a directory, so "dir/" patterns need the trailing slash too
+    return any(subprocess.run(["git", "-C", ROOT, "check-ignore", "-q", p], capture_output=True).returncode == 0
+               for p in (path, path + "/"))
 
 
 def check(name):

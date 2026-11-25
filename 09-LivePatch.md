@@ -2,7 +2,7 @@
 
 LivePatch is how the NEMESIS Debugging Execution Interface changes files and properties that ship with the head unit. Nothing under `/system` is rewritten. The patched copy lives on `/data` and is mounted over the stock file. Uninstalling a package unmounts it, and the stock file is in view again.
 
-LivePatch is part of NEMESIS 1.17 and later. The packages `adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session` and `enhanced.projection` use it.
+LivePatch is part of NEMESIS 1.17 and later. The packages `adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `carplay.session` and `enhanced.projection` use it.
 
 ---
 
@@ -124,7 +124,7 @@ LivePatch runs the tool as:
 - The output must depend only on `<in>` and `<args>`. LivePatch rebuilds the same file again on uninstall re-ports and repairs, and caches it by content.
 - It runs on the head unit: an ARM binary, or a `#!/system/bin/sh` script. That shell is mksh with toolbox. There is no `printf`, `awk`, `sed`, `head`, `tail`, `cut`, `tr`, `find`, `basename` or `busybox`. Use `print -r --`, `read`, `case`, `grep`, `cmp`, `md5`, `cp` and `dd`.
 
-A tool that only accepts the stock file it was built for (from `projection.tbt`):
+A tool that only accepts the stock file it was built for:
 
 ```sh
 #!/system/bin/sh
