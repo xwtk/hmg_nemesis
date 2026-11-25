@@ -83,9 +83,7 @@ am broadcast -a {TOAST_ACTION} \\
 {{compat}}
 if ! nemesis_compat; then
     sleep 2
-    am broadcast -a {TOAST_ACTION} \\
-      -e {TOAST_MSG_EXTRA} "$NEMESIS_COMPAT_MSG" \\
-      --ez {TOAST_POPUP_EXTRA} true 2>&1 || true
+    nemesis_compat_popup "$NEMESIS_COMPAT_MSG"
     # nothing changed; the OTA stops here (its validation fails), its files go from /data
     cat > /data/nemesis/ota-finish.sh << 'END'
 #!/system/bin/sh

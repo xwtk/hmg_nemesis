@@ -72,6 +72,11 @@
 #define META_DETAIL_MAX 256
 #define META_LIST_MAX 1024
 #define META_VERSION "1.2"
+/* Package versions known to break this NEMESIS, in depends= form (id@spec, comma-separated).
+ * hmgapi 1.0.99.9 is HMG-API 1.1.0-rc.9. */
+#define NEMESIS_BLACKLIST "hmgapi@<=1.0.99.9"
+#define BLACKLIST_MSG "Package \"%s\" (%s) is blocked from installing as it is known to cause issues with " \
+    "current version of NEMESIS which may render the HU inoperable. Install a newer version of this package to continue."
 #define FAVICON_MAX (256 * 1024)
 #define COMPAT_FULL 0
 #define COMPAT_PARTIAL 1
@@ -167,6 +172,7 @@ const char *meta_dep_spec(const char *deps, const char *id, char *spec, size_t c
 const char *meta_conflict_spec(const char *deps, const char *id, char *spec, size_t cap);
 int meta_deps_unmet(const pkg_meta *m, meta_lookup_fn lookup, char *reasons, size_t cap);
 int meta_too_new(const pkg_meta *m);
+int meta_blacklisted(const char *id, const char *ver);
 int meta_compat(const pkg_meta *m, const char *os_id, const char *model,
                 meta_lookup_fn lookup, char *reasons, size_t cap);
 const char *compat_name(int c);
@@ -216,6 +222,7 @@ int cacerts_install(const char *dir, char *added, size_t cap);
 int cmd_cacerts_install(const char *dir);
 int cmd_usb_info(int list);
 int cmd_compat_check(int argc, char **argv);
+int cmd_blacklist(int argc, char **argv);
 int cacerts_remove_owned(const char *only);
 void md5_file_hex(const char *path, char out[33]);
 void md5_str_hex(const char *s, char out[33]);

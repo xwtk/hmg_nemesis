@@ -138,6 +138,7 @@ nemesis pkg-info <zip|package-id>
 nemesis pkg-launch <package-id>
 nemesis compat <zip|package-id>
 nemesis compat-check <os> <models> [depends]
+nemesis blacklist [<package-id> <package-version> [name]]
 nemesis update [--force] [--accept-risk] [--no-reboot] <zip>
 nemesis cacerts-install <dir>
 nemesis usb-info [--list]
@@ -155,7 +156,8 @@ nemesis watchdog | svcmgr | usb-handler | ping
 Notes:
 
 - `pkg-list` lines: `id|name|locked|types|package-version|short-desc` (`locked` is `1` or `0`). `short-desc` is percent-encoded for `%`, `|`, CR, and LF.
-- `install` exit codes: 20 not marked compatible (pass `--accept-risk`), 21 the update would break an installed dependent.
+- `install` exit codes: 20 not marked compatible (pass `--accept-risk`), 21 the update would break an installed dependent, 27 the package version is on NEMESIS's blacklist (neither `--accept-risk` nor `--force` gets past it).
+- `blacklist` with no arguments prints the package versions this NEMESIS refuses, one `id@spec` per line, in `depends=` syntax. 1.17.1 has `hmgapi@<=1.0.99.9` (HMG-API 1.1.0-rc.9 and older). With an id and a package-version it exits 1 and prints the refusal when that version is listed, else exits 0. The Manager asks before it downloads or queues a package or its dependencies, and shows the refusal in a popup. A USB stick package that is listed opens the same popup instead of the install question.
 - `uninstall` exit codes: 4 other packages depend on it, 5 a hook or `pm uninstall` failed. `--force` carries on past 5, not past 4.
 - `update` exit codes are in [04 — Install and uninstall](04-Install-and-Uninstall.md).
 - `usb-info` prints `mounted=`, `meta=`, `root=`, `type=`, `path=`. `usb-info --list` prints the stick's `NEMESIS.data`.

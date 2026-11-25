@@ -67,6 +67,7 @@ public class DialogActivity extends Activity {
         i.putExtra("nemesis_name", e.name);
         i.putExtra("nemesis_id", e.id);
         i.putExtra("nemesis_depends", e.depends);
+        i.putExtra("nemesis_version", e.version);
         if (e.localZip.length() > 0) {
             i.putExtra("nemesis_path", e.localZip);
         } else {
@@ -594,6 +595,8 @@ public class DialogActivity extends Activity {
         main.localZip = localPath != null ? localPath : "";
         main.isInstalled = getIntent().hasExtra("nemesis_replace");
         main.depends = getIntent().getStringExtra("nemesis_depends");
+        String ver = getIntent().getStringExtra("nemesis_version");
+        main.version = ver != null ? ver : "";
         showProgress(getString(R.string.working));
         new Thread(new Runnable() {
             public void run() {
@@ -615,6 +618,7 @@ public class DialogActivity extends Activity {
             if (m.get("id") != null) main.id = m.get("id");
             if (main.name.length() == 0 && m.get("name") != null) main.name = m.get("name");
             main.depends = m.get("depends");
+            main.version = m.get("package-version") != null ? m.get("package-version") : "";
             main.isInstalled = "1".equals(m.get("installed"));
             String clash = blockedMessage(info.out, main.name);
             if (clash != null) {
@@ -622,7 +626,19 @@ public class DialogActivity extends Activity {
                 return;
             }
         }
+        String banned = blacklisted(main);
+        if (banned != null) {
+            goOnUi("result_fail", banned, null, null);
+            return;
+        }
         DepPlan plan = DepPlan.of(main.id, main.depends, PkgUpdates.source(this));
+        for (int k = 0; k < plan.steps.size(); k++) {
+            banned = blacklisted(plan.steps.get(k));
+            if (banned != null) {
+                goOnUi("result_fail", banned, null, null);
+                return;
+            }
+        }
         if (!plan.conflicts.isEmpty()) {
             List<String> names = new ArrayList<String>();
             for (int k = 0; k < plan.conflicts.size(); k++) {
@@ -671,6 +687,15 @@ public class DialogActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         for (int k = 0; k < items.size(); k++) sb.append("\n• ").append(items.get(k));
         return sb.toString();
+    }
+
+    /** NEMESIS's message when e's version is on its blacklist (nemesis blacklist), else null.
+     *  No version known yet: the install checks the zip's own and refuses it (exit 27). */
+    private static String blacklisted(StoreList.Entry e) {
+        if (e.version == null || e.version.length() == 0) return null;
+        Cli.Result r = Cli.exec("blacklist", e.id, e.version, e.name.length() > 0 ? e.name : e.id);
+        String msg = r.out == null ? "" : r.out.trim();
+        return r.rc == 1 && msg.length() > 0 ? msg : null;
     }
 
     /** The user-facing reason in install or pkg-info output, or null if it has none. */

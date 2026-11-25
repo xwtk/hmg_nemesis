@@ -88,7 +88,8 @@ OR
 
 ### 1.17.1
 
-- **NEMESIS 1.17 and later refuse to install** over HMG-API older than 1.1.0-rc.9, or, without HMG-API, over a modified `app_process`. The installer, the troubleshooter and the core update show why and change nothing. See [04 - Install and Uninstall](04-Install-and-Uninstall.md#units-nemesis-117-and-later-refuse).
+- **NEMESIS 1.17 and later refuse to install** over HMG-API older than 1.1.0-rc.10, or, without HMG-API, over a modified `app_process`. The installer, the troubleshooter and the core update show why in a popup and change nothing. On a unit that already has NEMESIS 1.17, the popup also warns not to uninstall that HMG-API before updating it, as that would render the HU inoperable. See [04 - Install and Uninstall](04-Install-and-Uninstall.md#units-nemesis-117-and-later-refuse).
+- **Blacklist.** Package Manager refuses package versions known to break this NEMESIS, with a popup naming the package and its version. 1.17.1 blocks HMG-API 1.1.0-rc.9 and older (`hmgapi` package-version 1.0.99.9 and lower). `nemesis blacklist` prints the list.
 - **Package Store** shows "Retrieving data…" with a spinner until the list has fully loaded, instead of the connection error. The connection error is now laid out on separate lines.
 - **LivePatch safe mode** no longer turns on after a single Android restart.
 - **`nemesis remount rw --bypass-livepatch`** lets a script outside NEMESIS write folders LivePatch serves read-only, such as `/system/lib` with Enhanced Projection installed. The next `nemesis remount ro` or boot puts LivePatch's view back. Packages use `[file.N]`, and tools that manage files hand them to LivePatch where they can, because safe mode and uninstall can't undo files written to `/system` directly.

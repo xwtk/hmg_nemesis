@@ -13,8 +13,8 @@ if ! . ./scripts/compat.sh; then
     exit 1
 fi
 if ! nemesis_compat; then
-    am broadcast -a com.hkmc.intent.action.TOAST -e com.hkmc.intent.extra.TOAST_MESSAGE "$NEMESIS_COMPAT_MSG" \
-        --ez com.hkmc.intent.extra.TOAST_POPUPSHOWING true >/dev/null 2>&1
+    # The Manager's "update failed" popup (in-app or from a stick) shows ui.error under its text.
+    /system/xbin/nemesis ui error "$NEMESIS_COMPAT_MSG" >/dev/null 2>&1
     print -r -- "$NEMESIS_COMPAT_MSG"
     exit 1
 fi

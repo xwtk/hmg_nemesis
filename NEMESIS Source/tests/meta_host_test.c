@@ -289,7 +289,19 @@ static void test_escape(void) {
     CHECK(!strcmp(out, "abcdef"), "escape truncates whole '%s'", out);
 }
 
+static void test_blacklist(void) {
+    CHECK(meta_blacklisted("hmgapi", "1.0.99.9"), "HMG-API rc.9 blacklisted");
+    CHECK(meta_blacklisted("hmgapi", "1.0.99.1"), "HMG-API rc.1 blacklisted");
+    CHECK(meta_blacklisted("hmgapi", "1.0.2"), "HMG-API 1.0.2 blacklisted");
+    CHECK(meta_blacklisted("hmgapi", ""), "HMG-API with no version blacklisted");
+    CHECK(!meta_blacklisted("hmgapi", "1.0.99.10"), "HMG-API rc.10 allowed");
+    CHECK(!meta_blacklisted("hmgapi", "1.1.0"), "HMG-API 1.1.0 allowed");
+    CHECK(!meta_blacklisted("hmgapi.cam", "0.1"), "an HMG-API mod is not HMG-API");
+    CHECK(!meta_blacklisted("adb.tcp", "1.0"), "other packages allowed");
+}
+
 int main(void) {
+    test_blacklist();
     test_ini();
     test_meta();
     test_versions();

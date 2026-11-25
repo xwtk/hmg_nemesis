@@ -303,6 +303,12 @@ int meta_too_new(const pkg_meta *m) {
     return strcmp(m->id, CORE_ID) && ver_cmp(m->meta_ver, META_VERSION) > 0;
 }
 
+/* 1 when `id` at `ver` is on NEMESIS_BLACKLIST; a package with no version counts as 0. */
+int meta_blacklisted(const char *id, const char *ver) {
+    char spec[64];
+    return meta_dep_spec(NEMESIS_BLACKLIST, id, spec, sizeof(spec)) && dep_spec_match(spec, ver && *ver ? ver : "0");
+}
+
 /* The verdict is about this head unit only. Unmet dependencies stay listed as
  * reasons, and install refuses them on their own (exit 22). */
 int meta_compat(const pkg_meta *m, const char *os_id, const char *model,

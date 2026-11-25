@@ -814,6 +814,15 @@ int cmd_install(int argc, char **argv) {
     ui_reset();
     if (load_zip_meta(zip, &ini, &meta) != 0) return 1;
     id = meta.id;
+    /* Not a risk to accept, nor one --force skips: the HU may not start again. */
+    if (!core && meta_blacklisted(id, meta.pkg_ver)) {
+        const char *v = meta.pkg_ver[0] ? meta.pkg_ver : "no version";
+        printf("blacklisted %s|%s|%s\n", id, meta.name, v);
+        fflush(stdout);
+        fprintf(stderr, BLACKLIST_MSG "\n", meta.name, v);
+        ini_free(&ini);
+        return 27;
+    }
     have_existing = pkg_find(id, &existing) == 0;
     if (have_existing && existing.locked) locked_exist = 1;
     /* --core: a built-in package from a NEMESIS update; it may replace a
@@ -1093,6 +1102,20 @@ int cmd_pkg_info(const char *arg) {
         if (inst) print_dependents(m.id, m.pkg_ver[0] ? m.pkg_ver : "0");
         print_conflicts(&m);
     }
+    return 0;
+}
+
+/* blacklist: the list, one entry per line. blacklist <id> <version>: exit 1 and the
+ * owner's message when that version is on it, else 0. */
+int cmd_blacklist(int argc, char **argv) {
+    const char *p = NEMESIS_BLACKLIST;
+    char item[160];
+    if (argc >= 2) {
+        if (!meta_blacklisted(argv[0], argv[1])) return 0;
+        printf(BLACKLIST_MSG "\n", argc > 2 ? argv[2] : argv[0], argv[1][0] ? argv[1] : "no version");
+        return 1;
+    }
+    while (meta_list_next(&p, item, sizeof(item))) printf("%s\n", item);
     return 0;
 }
 

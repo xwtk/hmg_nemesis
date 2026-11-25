@@ -2,16 +2,18 @@
 # Used by the USB installer's control script, the troubleshooter and the core update's migrate.sh;
 # the installer app has the same rules in Java (InstallerActivity.Compat).
 # nemesis_compat returns 0 when the unit is fine, else 1 with NEMESIS_COMPAT_MSG for the owner:
-#  - HMG-API installed and older than 1.1.0-rc.9 (it writes app_process itself, under LivePatch's
-#    wrapper only from rc.9), or of unknown version;
+#  - HMG-API installed and older than 1.1.0-rc.10, or of unknown version. With NEMESIS 1.17+
+#    already on the unit (LivePatch's wrapper or app_process.real), the message also says not to
+#    uninstall that HMG-API before updating it;
 #  - no HMG-API, and app_process (the binary behind NEMESIS's own LivePatch wrapper, when that's
 #    there) isn't the stock AOSP binary. The unit keeps no list of its build's files, so "stock" is
 #    what the build's binary is: the dynamic AOSP app_process starting ZygoteInit, with nothing that
 #    hands over to another binary or preloads a library.
 
-NEMESIS_HMGAPI_MIN=1.1.0-rc.9
+NEMESIS_HMGAPI_MIN=1.1.0-rc.10
 NEMESIS_COMPAT_ROOT=${NEMESIS_COMPAT_ROOT:-}   # tests only: a tree standing in for /
 NEMESIS_MSG_HMGAPI="NEMESIS 1.17 and later are not compatible with your HMG-API version, update it or uninstall to continue installation."
+NEMESIS_MSG_HMGAPI_LP="NEMESIS 1.17 and later are not compatible with your HMG-API version. Update HMG-API to 1.1.0-rc.10 or later to continue installation. Do not uninstall HMG-API before updating it: with NEMESIS 1.17 installed, uninstalling this HMG-API version will render the HU inoperable."
 NEMESIS_MSG_APP_PROCESS="NEMESIS 1.17 and later utilize a critical system component (app_process binary) for additional features, which has been modified, restore it to factory state to continue installation."
 
 # compat_num <s>: s if it is all digits, else 0
@@ -85,23 +87,39 @@ compat_stock_app_process() {
 }
 
 nemesis_compat() {
-    local v a b R=$NEMESIS_COMPAT_ROOT ap=$NEMESIS_COMPAT_ROOT/system/bin/app_process
+    local v a b lp= R=$NEMESIS_COMPAT_ROOT ap=$NEMESIS_COMPAT_ROOT/system/bin/app_process
     NEMESIS_COMPAT_MSG=
-    if [ -f "$R/data/hmgapi/installed.txt" ] || [ -f "$R/system/bin/hmgapid" ]; then
-        v=$(compat_hmgapi_version)
-        if [ -z "$v" ] || compat_older "$v" "$NEMESIS_HMGAPI_MIN"; then
-            NEMESIS_COMPAT_MSG=$NEMESIS_MSG_HMGAPI
-            return 1
-        fi
-        return 0
-    fi
     a=
     b=
     { read -r a; read -r b; } 2>/dev/null < "$ap"   # stderr first: a missing file's error comes from the < itself
     case $a$b in
-        '#!/system/bin/sh# NEMESIS LivePatch'*) ap=$R/system/bin/app_process.real ;;
+        '#!/system/bin/sh# NEMESIS LivePatch'*) lp=1; ap=$R/system/bin/app_process.real ;;
     esac
+    [ -f "$R/system/bin/app_process.real" ] && lp=1   # only NEMESIS 1.17+ makes it
+    if [ -f "$R/data/hmgapi/installed.txt" ] || [ -f "$R/system/bin/hmgapid" ]; then
+        v=$(compat_hmgapi_version)
+        if [ -z "$v" ] || compat_older "$v" "$NEMESIS_HMGAPI_MIN"; then
+            NEMESIS_COMPAT_MSG=$NEMESIS_MSG_HMGAPI
+            [ -n "$lp" ] && NEMESIS_COMPAT_MSG=$NEMESIS_MSG_HMGAPI_LP
+            return 1
+        fi
+        return 0
+    fi
     compat_stock_app_process "$ap" && return 0
     NEMESIS_COMPAT_MSG=$NEMESIS_MSG_APP_PROCESS
     return 1
+}
+
+# nemesis_compat_popup <text>: a popup the owner closes with OK, from NEMESIS Manager (any version
+# has DialogActivity's "invalid" mode). A unit without NEMESIS has no app for one: the HU's
+# toast is all a root script can show there.
+nemesis_compat_popup() {
+    if [ -f /system/app/NEMESIS.apk ]; then
+        am start -n com.nemesis.manager/.DialogActivity --es nemesis_mode invalid \
+            --es nemesis_message "$1" >/dev/null 2>&1
+        return 0
+    fi
+    am broadcast -a com.hkmc.intent.action.TOAST -e com.hkmc.intent.extra.TOAST_MESSAGE "$1" \
+        --ez com.hkmc.intent.extra.TOAST_POPUPSHOWING true >/dev/null 2>&1
+    return 0
 }

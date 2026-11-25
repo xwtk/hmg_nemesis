@@ -17,6 +17,7 @@ static void usage(void) {
             "nemesis cacerts-install <dir>\n"
             "nemesis usb-info [--list]\n"
             "nemesis compat-check <os> <models> [depends]\n"
+            "nemesis blacklist [<package-id> <package-version> [name]]\n"
             "nemesis version\n"
             "nemesis wipe --confirm [--no-reboot]\n"
             "nemesis queue add|uninstall|resume|delete|list|run ...\n"
@@ -40,6 +41,7 @@ int main(int argc, char **argv) {
         printf("%s\n", NEMESIS_VERSION);
         return 0;
     }
+    if (!strcmp(op, "blacklist")) return cmd_blacklist(argc - 2, argv + 2);
     if (!strcmp(op, "boot-apply")) return cmd_boot_apply();
     if (!strcmp(op, "ping")) return su_ping_tries(3) == 0 ? 0 : 1;
     if (geteuid() != 0) {

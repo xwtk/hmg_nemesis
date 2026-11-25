@@ -373,7 +373,7 @@ static void do_execute(const char *full, const char *root) {
 }
 
 static void do_install(const char *full, char *reply, size_t cap) {
-    char info_id[MAX_ID] = "", info_name[MAX_NAME] = "";
+    char info_id[MAX_ID] = "", info_name[MAX_NAME] = "", info_ver[32] = "";
     char nreply[128];
     pkg_rec rec;
     int inst, locked = 0;
@@ -387,8 +387,16 @@ static void do_install(const char *full, char *reply, size_t cap) {
             const char *n = ini_get(&zini, "nemesis", "name");
             snprintf(info_id, sizeof(info_id), "%s", v ? v : "");
             snprintf(info_name, sizeof(info_name), "%s", n ? n : info_id);
+            v = ini_get(&zini, "nemesis", "package-version");
+            snprintf(info_ver, sizeof(info_ver), "%s", v ? v : "");
             ini_free(&zini);
         }
+    }
+    /* The Manager's install_blocked popup says why; install refuses it anyway (exit 27). */
+    if (info_id[0] && framework_up() && meta_blacklisted(info_id, info_ver)) {
+        log_msg("usb install %s %s: blacklisted", info_id, info_ver);
+        usb_notify("install_blocked", full, info_id, info_name, reply, cap);
+        return;
     }
     inst = info_id[0] && pkg_find(info_id, &rec) == 0;
     if (inst) locked = rec.locked;

@@ -213,7 +213,7 @@ agree=""
 case "$agree" in
   1)
     if ! nemesis_compat; then
-        toast "$NEMESIS_COMPAT_MSG"
+        nemesis_compat_popup "$NEMESIS_COMPAT_MSG"
         cleanup_installer
         finish 0
     fi

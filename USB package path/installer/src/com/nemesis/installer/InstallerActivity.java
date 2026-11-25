@@ -56,7 +56,7 @@ public class InstallerActivity extends Activity {
     /** boot/compat.sh in Java, as far as an app can see: HMG-API's /data is root-only, so its
      *  version is its app's. Returns the refusal's message, or 0. */
     static final class Compat {
-        static final String HMGAPI_MIN = "1.1.0-rc.9";
+        static final String HMGAPI_MIN = "1.1.0-rc.10";
         private static final String WRAPPER = "#!/system/bin/sh\n# NEMESIS LivePatch";
         private static final String[] NEED = {"/system/bin/linker",
                 "com.android.internal.os.ZygoteInit", "NO_ADDR_COMPAT_LAYOUT_FIXUP"};
@@ -73,9 +73,17 @@ public class InstallerActivity extends Activity {
                 // not installed
             }
             if (hmgapi) {
-                return v == null || older(v, HMGAPI_MIN) ? R.string.compat_hmgapi : 0;
+                if (v != null && !older(v, HMGAPI_MIN)) return 0;
+                return livePatch("/system/bin") ? R.string.compat_hmgapi_lp : R.string.compat_hmgapi;
             }
             return stockAppProcess("/system/bin") ? 0 : R.string.compat_app_process;
+        }
+
+        /** NEMESIS 1.17+ is on the unit: its LivePatch wrapper, or the app_process.real it keeps. */
+        static boolean livePatch(String dir) {
+            if (new File(dir + "/app_process.real").exists()) return true;
+            String b = read(dir + "/app_process");
+            return b != null && b.startsWith(WRAPPER);
         }
 
         /** dir/app_process, or the binary behind NEMESIS's LivePatch wrapper, is the AOSP one. */
