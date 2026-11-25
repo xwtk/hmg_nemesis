@@ -212,7 +212,7 @@ Build and install it the same way as any other package (see [05 - Packages](05-P
 
 - Targets must be under `/system/`. Paths with `..` are refused.
 - Do not also write the target from a hook. LivePatch owns what is mounted there.
-- A folder where a package adds a new file is served through a read-only overlay. Hooks cannot write into it, and neither can a plain `nemesis remount rw`. Put files there with `[file.N]`; a tool that manages files itself uses 3.8. A script outside NEMESIS that must write the real folder runs `nemesis remount rw --bypass-livepatch`, which takes the overlays down until the next `nemesis remount ro` or boot.
+- A folder where a package adds a new file is served through a read-only overlay. Hooks cannot write into it, and neither can a plain `nemesis remount rw`. Put files there with `[file.N]`; a tool that manages files itself uses 3.8. A script outside NEMESIS that must write the real folder runs `nemesis remount rw --bypass-livepatch`, which takes the overlays down until the next `nemesis remount ro` or boot. Prefer LivePatch (`[file.N]`, or 3.8 for a tool) over `--bypass-livepatch` whenever it can do the job: LivePatch doesn't know about a file written to `/system` directly, so safe mode can't boot stock past it, uninstall can't restore it, and no conflict with another package is caught.
 - A new class or member that collides with one from a package below it is renamed `<name>$nms<pos>`, and renamed back when that package is uninstalled. Do not depend on reflection by the name you added.
 - Test the package on the unit with another package that patches the same target, installed in both orders. Each uninstall must leave the other package working.
 
