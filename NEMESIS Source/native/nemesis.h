@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.17"
+#define NEMESIS_VERSION "1.17.1"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -236,6 +236,8 @@ void lp_discard(const char *id);
 int lp_damaged_take(char *buf, size_t cap);
 void lp_damaged_clear(void);
 void lp_hook_watch(const char *hook, int after);
+void lp_step_aside(const char *why);
+void lp_step_back(const char *why);
 int lp_props_check(const ini_file *ini, const char *id);
 int cmd_prop(int argc, char **argv);
 void lp_props_remove(const char *id);

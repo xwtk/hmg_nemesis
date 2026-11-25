@@ -86,10 +86,19 @@ OR
 
 ## **Changelog**
 
+### 1.17.1
+
+- **HMG-API and Leafia.** NEMESIS now works next to other tools that wrap Android's start-up (HMG-API, HMG Leafia Plus and others). Installing, updating or uninstalling them no longer stops Android from starting or hides their update. A head unit left that way by 1.17 is repaired by the update, or by the Repair app_process USB bundle if Android doesn't start.
+- **Packages that change system files** can write to folders LivePatch serves again, such as `/system/lib` with Enhanced Projection installed. `nemesis remount rw` and `ro` do the same for scripts outside NEMESIS.
+- **LivePatch safe mode** no longer turns on after a single Android restart.
+- **NEMESIS uninstall** from USB puts back a start-up file that works, instead of whatever was there. When the `nemesis` binary is already gone, the 1.17 script left the start-up file alone, because the head unit's `mv` rejects `-f`.
+- A LivePatch package is refused when an HMG-API mod already changes the same file. Remove that mod in HMG-API first.
+- **Sources.** A fresh clone builds and passes its host tests again: `enhanced.projection/native/converter.c` is back, and the build and tests skip the parts that are not published (listed in `.gitignore`). `projection.tbt` is removed; `enhanced.projection` replaces it.
+
 ### 1.17
 
 - **LivePatch.** Packages can change stock files and system properties without writing `/system`. The patched copy lives on `/data` and is mounted over the stock file at boot, and uninstall brings stock back at once. Several packages can patch the same file. Conflicts are refused at install, and a safe mode boots stock after repeated failed boots. See [09 - LivePatch](09-LivePatch.md).
-- **Packages.** `adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `projection.tbt`, `carplay.session` and `enhanced.projection` now use LivePatch. Uninstall their 1.x release before installing the new one.
+- **Packages.** `adb.tcp`, `wireless.projection`, `voicehandler.vr-gates`, `carplay.session` and `enhanced.projection` now use LivePatch. Uninstall their 1.x release before installing the new one.
 - **Install queue.** Installs and uninstalls now run one at a time from a queue, so a USB stick can be removed as soon as its packages are queued. A job cut off by a power loss or restart can be continued or deleted. If a script was running when the job stopped, the Manager warns that the head unit may need checking. CLI: `nemesis queue add|uninstall|resume|delete|list`.
 - **Package Manager.** A new screen with Available updates, In progress, Interrupted and Installed sections replaces the Updates screen. It shows live install progress and lists the packages on a connected USB drive. When the queue is done, it counts down a single restart for everything that needs one, LivePatch packages included.
 - **Descriptor version 1.2.** `NEMESIS.data` has a `version` key. A package written for a newer NEMESIS is refused, even with the risk accepted, and the Store asks you to update NEMESIS. `1.2` adds `favicon`, an icon shown in the Store and package lists.
