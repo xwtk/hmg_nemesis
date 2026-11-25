@@ -33,10 +33,6 @@
 #define LP_ASIDE LP_DIR "/aside"
 #define WRAPPER "/system/bin/app_process"
 #define WRAPPER_REAL "/system/bin/app_process.real"
-#define ZYGOTE_STOCK NEMESIS_ROOT "/stock/app_process"
-#define HMG_STOCK "/data/hmgapi/stock/system/bin/app_process"
-#define STOCK_USAGE "Usage: app_process [java-options] cmd-dir start-class-name"
-#define LINK_MAX_SIZE (8 * MB)
 #define LP_MAX 128
 #define CHAIN_MAX 16
 #define MB (1LL << 20)
@@ -1130,191 +1126,28 @@ static int lp_boot_apply(void) {
 
 /* ---- wrapper ---- */
 
-/* The 1.17 header too, so an older wrapper text is recognised and rewritten. */
-static int is_script(const char *path) {
+static int is_wrapper(void) {
     char buf[sizeof(WRAPPER_TEXT) + 8];
-    int n = read_file(path, buf, sizeof(buf));
+    int n = read_file(WRAPPER, buf, sizeof(buf));
     return n > 0 && !strncmp(buf, "#!/system/bin/sh\n# NEMESIS LivePatch", 36);
 }
 
-/* The zygote chain: app_process -> (other tools' wrappers, HMG-API, Leafia, ...) -> stock. A link
- * names the next one as an absolute /system/bin/app_process<suffix> path inside its bytes; stock
- * names only /system/bin/app_process (its own re-exec). No tool's names are known here. */
-enum { CH_OK, CH_DEAD, CH_LOOP };
-#define LINK_REFS 4
-
-static int is_elf(const char *path) {
-    char m[5];
-    return read_file(path, m, sizeof(m)) == 4 && !memcmp(m, "\177ELF", 4);
-}
-
-static int is_link_char(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
-}
-
-/* The app_process<suffix> paths a link names (itself left out); usage=1 when it has stock's usage
- * text. -1 when unreadable. */
-static int link_refs(const char *path, char (*refs)[MAX_PATH], int cap, int *usage) {
-    static const char pre[] = WRAPPER;
-    struct stat st;
-    FILE *f;
-    char *b;
-    size_t len, i, j, pl = sizeof(pre) - 1, ul = sizeof(STOCK_USAGE) - 1;
-    int n = 0, k, dup;
-    *usage = 0;
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > LINK_MAX_SIZE) return -1;
-    if (!(b = malloc((size_t)st.st_size))) return -1;
-    if (!(f = fopen(path, "rb"))) {
-        free(b);
-        return -1;
-    }
-    len = fread(b, 1, (size_t)st.st_size, f);
-    fclose(f);
-    for (i = 0; i < len; i++) {
-        if (b[i] == 'U' && i + ul <= len && !memcmp(b + i, STOCK_USAGE, ul)) *usage = 1;
-        if (b[i] != '/' || i + pl > len || memcmp(b + i, pre, pl)) continue;
-        for (j = i + pl; j < len && is_link_char(b[j]) && j - i < MAX_PATH - 1; j++)
-            ;
-        if (j == i + pl) continue; /* the head itself */
-        if (n >= cap) continue;
-        memcpy(refs[n], b + i, j - i);
-        refs[n][j - i] = 0;
-        for (dup = 0, k = 0; k < n; k++) dup |= !strcmp(refs[k], refs[n]);
-        if (!dup && strcmp(refs[n], path)) n++;
-    }
-    free(b);
-    return n;
-}
-
-static int is_stock(const char *path) {
-    char refs[LINK_REFS][MAX_PATH];
-    int usage;
-    return is_elf(path) && link_refs(path, refs, LINK_REFS, &usage) == 0 && usage;
-}
-
-/* CH_OK when the chain from path ends in a binary that names no further link (term gets it);
- * CH_DEAD when it ends in a missing file; CH_LOOP when it reaches NEMESIS's wrapper again. */
-static int chain_walk(const char *path, int depth, char *term, size_t tcap) {
-    char refs[LINK_REFS][MAX_PATH];
-    int n, i, r, worst = CH_DEAD, usage, any = 0;
-    if (!is_file(path)) return CH_DEAD;
-    if ((depth > 0 && is_script(path)) || depth > 8) return CH_LOOP;
-    if ((n = link_refs(path, refs, LINK_REFS, &usage)) < 0) return CH_DEAD;
-    if (n == 0) {
-        /* shortcut: a script naming no app_process path can't be judged and is trusted, walk what it execs if such a wrapper turns up */
-        if (!is_elf(path)) return CH_OK;
-        snprintf(term, tcap, "%s", path);
-        return CH_OK;
-    }
-    /* A wrapper may name fallbacks it doesn't need: one live next link is enough. */
-    for (i = 0; i < n; i++) {
-        if (!is_file(refs[i])) continue;
-        any = 1;
-        if ((r = chain_walk(refs[i], depth + 1, term, tcap)) == CH_OK) return CH_OK;
-        if (r == CH_LOOP) worst = CH_LOOP;
-    }
-    return any ? worst : CH_DEAD;
-}
-
-/* Copy, md5 check, rename: dst is never half-written. */
-static int put_file(const char *src, const char *dst, mode_t mode, uid_t uid, gid_t gid) {
-    char tmp[MAX_PATH], a[33], b[33];
-    snprintf(tmp, sizeof(tmp), "%s.nemesis-new", dst);
-    if (copy_file(src, tmp, mode) != 0 || chown(tmp, uid, gid) != 0) goto fail;
-    md5_file_hex(src, a);
-    md5_file_hex(tmp, b);
-    if (strcmp(a, b) || rename(tmp, dst) != 0) goto fail;
-    return 0;
-fail:
-    log_msg("livepatch: copy %s -> %s failed errno=%d", src, dst, errno);
-    unlink(tmp);
-    return -1;
-}
-
-/* NEMESIS's own stock copy first (the last one seen live), then HMG-API's backup, then any stock
- * binary left in /system/bin under another app_process name. */
-static int stock_find(char *out, size_t cap) {
-    static const char *fixed[] = { ZYGOTE_STOCK, HMG_STOCK };
-    DIR *d;
-    struct dirent *e;
-    unsigned i;
-    for (i = 0; i < sizeof(fixed) / sizeof(fixed[0]); i++)
-        if (is_stock(fixed[i])) {
-            snprintf(out, cap, "%s", fixed[i]);
-            return 0;
-        }
-    if (!(d = opendir("/system/bin"))) return -1;
-    while ((e = readdir(d))) {
-        if (strncmp(e->d_name, "app_process.", 12) || strstr(e->d_name, ".nemesis-new")) continue;
-        snprintf(out, cap, "/system/bin/%s", e->d_name);
-        if (is_stock(out)) {
-            closedir(d);
-            return 0;
-        }
-    }
-    closedir(d);
-    return -1;
-}
-
-static void stock_keep(const char *term) {
-    char a[33], b[33];
-    if (!term[0] || !is_stock(term)) return;
-    md5_file_hex(term, a);
-    if (is_file(ZYGOTE_STOCK)) {
-        md5_file_hex(ZYGOTE_STOCK, b);
-        if (!strcmp(a, b)) return;
-    }
-    mkdir_p(NEMESIS_ROOT "/stock", 0700);
-    if (put_file(term, ZYGOTE_STOCK, 0600, 0, 0) == 0) log_msg("livepatch: kept stock app_process %s (%s)", a, term);
-}
-
-static int has_ref(char (*refs)[MAX_PATH], int n, const char *p) {
-    while (n-- > 0)
-        if (!strcmp(refs[n], p)) return 1;
-    return 0;
-}
-
-/* Run at every watchdog start and after every package hook, never while one runs. Whatever is at
- * app_process that isn't NEMESIS's wrapper was put there since (stock back after another tool's
- * uninstall, its update's new wrapper) and becomes app_process.real. A dead .real is replaced by a
- * stock copy. The wrapper goes on only over a chain that reaches a binary. */
+/* Idempotent. The first run keeps the real binary as app_process.real. */
 int lp_wrapper_install(void) {
-    char tmp[MAX_PATH], cur[sizeof(WRAPPER_TEXT) + 8], term[MAX_PATH] = "", st[MAX_PATH];
-    char refs[LINK_REFS][MAX_PATH];
-    int r, n, usage;
+    char tmp[MAX_PATH], cur[sizeof(WRAPPER_TEXT) + 8];
     if (!path_exists(WRAPPER)) return -1;
-    if (!is_script(WRAPPER)) {
-        r = chain_walk(WRAPPER, 0, term, sizeof(term));
-        n = link_refs(WRAPPER, refs, LINK_REFS, &usage);
-        if (r == CH_LOOP) {
-            /* another wrapper put over NEMESIS's runs it as its next link: boot-apply still runs */
-            log_msg("livepatch: %s runs NEMESIS's wrapper itself; left as it is", WRAPPER);
-            return 0;
-        }
-        if (n > 0 && has_ref(refs, n, WRAPPER_REAL)) {
-            log_msg("livepatch: %s runs %s itself; LivePatch's wrapper left out", WRAPPER, WRAPPER_REAL);
+    if (is_wrapper()) {
+        int n = read_file(WRAPPER, cur, sizeof(cur));
+        if (n == (int)sizeof(WRAPPER_TEXT) - 1 && !strcmp(cur, WRAPPER_TEXT)) return 0;
+    } else if (!is_file(WRAPPER_REAL)) {
+        struct stat st;
+        if (stat(WRAPPER, &st) != 0 || copy_file(WRAPPER, WRAPPER_REAL, st.st_mode & 0777) != 0) {
+            log_msg("livepatch: cannot keep %s errno=%d", WRAPPER_REAL, errno);
             return -1;
         }
-        if (r == CH_OK) {
-            if (put_file(WRAPPER, WRAPPER_REAL, 0755, 0, 2000) != 0) return -1;
-            log_msg("livepatch: %s kept as %s", WRAPPER, WRAPPER_REAL);
-        } else log_msg("livepatch: %s can't start the zygote (it runs a missing file); NEMESIS's wrapper goes over it", WRAPPER);
-        term[0] = 0;
+        chown(WRAPPER_REAL, 0, 2000);
     }
-    if (chain_walk(WRAPPER_REAL, 1, term, sizeof(term)) != CH_OK) {
-        if (stock_find(st, sizeof(st)) != 0) {
-            log_msg("livepatch: %s can't start the zygote and no stock app_process copy is left; nothing changed", WRAPPER_REAL);
-            return -1;
-        }
-        if (put_file(st, WRAPPER_REAL, 0755, 0, 2000) != 0) return -1;
-        log_msg("livepatch: %s couldn't start the zygote; now the stock copy from %s", WRAPPER_REAL, st);
-        snprintf(term, sizeof(term), "%s", WRAPPER_REAL);
-    }
-    stock_keep(term);
-    if (is_script(WRAPPER)) {
-        int k = read_file(WRAPPER, cur, sizeof(cur));
-        if (k == (int)sizeof(WRAPPER_TEXT) - 1 && !strcmp(cur, WRAPPER_TEXT)) return 0;
-    }
+    if (!is_file(WRAPPER_REAL)) return -1;
     snprintf(tmp, sizeof(tmp), "%s.nemesis-new", WRAPPER);
     if (write_file(tmp, WRAPPER_TEXT, 0755) != 0 || chmod(tmp, 0755) != 0 ||
         chown(tmp, 0, 2000) != 0 || rename(tmp, WRAPPER) != 0) {
@@ -1326,32 +1159,13 @@ int lp_wrapper_install(void) {
     return 0;
 }
 
-/* app_process.real goes back only while its chain reaches a binary; otherwise a stock copy does. */
 int lp_wrapper_remove(void) {
-    char term[MAX_PATH] = "", st[MAX_PATH];
-    int live;
-    if (!is_script(WRAPPER)) return 0;
-    live = chain_walk(WRAPPER_REAL, 1, term, sizeof(term)) == CH_OK;
-    if (!live && stock_find(st, sizeof(st)) != 0) {
-        log_msg("livepatch: %s can't start the zygote and no stock app_process copy is left; wrapper kept", WRAPPER_REAL);
-        return -1;
-    }
+    if (!is_wrapper()) return 0;
+    if (!is_file(WRAPPER_REAL)) return -1;
     lp_unmount_all();
-    if (live ? rename(WRAPPER_REAL, WRAPPER) != 0 : put_file(st, WRAPPER, 0755, 0, 2000) != 0) return -1;
-    if (!live) {
-        unlink(WRAPPER_REAL);
-        log_msg("livepatch: %s couldn't start the zygote; app_process is the stock copy from %s", WRAPPER_REAL, st);
-    }
+    if (rename(WRAPPER_REAL, WRAPPER) != 0) return -1;
     log_msg("livepatch: wrapper removed");
     return 0;
-}
-
-/* After a package hook: farms back, then the wrapper adopts what the hook put at app_process. */
-static void wrapper_sync(void) {
-    char term[MAX_PATH];
-    if (is_script(WRAPPER) && chain_walk(WRAPPER_REAL, 1, term, sizeof(term)) == CH_OK) return;
-    remount_system(1);
-    lp_wrapper_install();
 }
 
 /* ---- engine=dex ---- */
@@ -2335,9 +2149,9 @@ int lp_check(const ini_file *ini, const char *id) {
     return 0;
 }
 
-/* Around every package hook: the farms step aside so the hook writes the real directories, a hook
- * touching a managed target is logged (09-LivePatch.md, 3.7), and the wrapper adopts what the
- * hook left at app_process. HMG-API's sync runs (HMGAPI_NEMESIS_SYNC=1) write nothing: no churn. */
+/* Around every package hook: the farms step aside so the hook writes the real directories, and a
+ * hook touching a managed target is logged (09-LivePatch.md, 3.7). HMG-API's sync runs
+ * (HMGAPI_NEMESIS_SYNC=1) write nothing: no churn. */
 void lp_hook_watch(const char *hook, int after) {
     static struct { char t[MAX_PATH]; struct stat st; int ok; } hw[LP_MAX];
     static int hn;
@@ -2366,7 +2180,6 @@ void lp_hook_watch(const char *hook, int after) {
     if (!owner) return;
     unsetenv("NEMESIS_LP_HOOK");
     if (!quiet) lp_step_back(hook);
-    wrapper_sync();
 }
 
 static int selftest(void) {
@@ -2396,7 +2209,7 @@ int cmd_livepatch(int argc, char **argv) {
         static lp_row rows[LP_MAX];
         char d[MAX_PATH];
         int i, n = lp_load(rows, LP_MAX);
-        printf("wrapper=%d safe=%d\n", is_script(WRAPPER), path_exists(LP_SAFE) ? 1 : 0);
+        printf("wrapper=%d safe=%d\n", is_wrapper(), path_exists(LP_SAFE) ? 1 : 0);
         for (i = 0; i < n; i++) {
             parent_of(rows[i].target, d, sizeof(d));
             printf("%s %s\n", rows[i].target, lp_mounted(rows[i].target) ? "mounted" : dir_farmed(d) ? "farmed" : "unmounted");

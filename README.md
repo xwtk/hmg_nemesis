@@ -88,11 +88,10 @@ OR
 
 ### 1.17.1
 
-- **HMG-API and Leafia.** NEMESIS now works next to other tools that wrap Android's start-up (HMG-API, HMG Leafia Plus and others). Installing, updating or uninstalling them no longer stops Android from starting or hides their update. A head unit left that way by 1.17 is repaired by the update, or by the Repair app_process USB bundle if Android doesn't start.
-- **Packages that change system files** can write to folders LivePatch serves again, such as `/system/lib` with Enhanced Projection installed. `nemesis remount rw` and `ro` do the same for scripts outside NEMESIS.
+- **Packages that change system files** can write to folders LivePatch serves again, such as `/system/lib` with Enhanced Projection installed. `nemesis remount rw` and `ro` do the same for scripts outside NEMESIS, so HMG-API 1.1.0-rc.9 or newer installs and uninstalls next to LivePatch packages.
 - **LivePatch safe mode** no longer turns on after a single Android restart.
 - **"LivePatch engine missing".** The 1.17 USB update package didn't install the LivePatch engine, so LivePatch packages failed to install on units set up from USB. The 1.17.1 USB package and the in-app update both install it.
-- **NEMESIS uninstall** from USB puts back a start-up file that works, instead of whatever was there. When the `nemesis` binary is already gone, the 1.17 script left the start-up file alone, because the head unit's `mv` rejects `-f`.
+- **NEMESIS uninstall** from USB puts Android's start-up file back again. When the `nemesis` binary was already gone, the 1.17 script left NEMESIS's start-up script in place, because the head unit's `mv` rejects `-f`.
 - A LivePatch package is refused when an HMG-API mod already changes the same file. Remove that mod in HMG-API first.
 - **Sources.** A fresh clone builds and passes its host tests again: `enhanced.projection/native/converter.c` is back, and the build and tests skip the parts that are not published (listed in `.gitignore`). `projection.tbt` is removed; `enhanced.projection` replaces it.
 

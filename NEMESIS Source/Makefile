@@ -58,6 +58,10 @@ test-hooks:
 	python3 tests/check_manager_apk.py
 	bash tests/pkg_live_snapshot.sh
 	python3 tests/pkg_livepatch_check.py
+	@# head-unit toolbox mv takes no options: `mv -f` fails and moves nothing
+	@! grep -rnE --include='*.sh' --include='*.py' --include=NEMESIS.data '(^|[^a-z_])mv -[a-z]' \
+		usb_bundle boot packages tools "../USB package path" "../USB OTA troubleShooter path" || \
+		{ echo "FAIL: mv with an option in a head-unit script"; exit 1; }
 
 clean:
 	$(MAKE) -C native clean

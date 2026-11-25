@@ -37,8 +37,7 @@ int cmd_remount(int argc, char **argv) {
         }
     }
     /* A writer outside NEMESIS (HMG-API's uninstall over adb, a USB script): LivePatch's read-only
-     * farms step aside for it. Inside a job the hook around it already did. No wrapper adopt here:
-     * the writer may still check app_process after ro; the next watchdog start adopts. */
+     * farms step aside for it. Inside a job the hook around it already did. */
     if (!getenv("NEMESIS_JOB")) {
         if (rw) lp_step_aside("nemesis remount rw");
         else lp_step_back("nemesis remount ro");
