@@ -60,6 +60,7 @@ Dalvik odex for Manager is deleted **only during this OTA script**, not on every
 | `/system/etc/qb_runtime.sh` | **Append** of a `NEMESIS_QB_HOOK` block if the marker is not already present. Stock body is not replaced. |
 | `/system/etc/security/cacerts/<hash>.0` | `0644`. Added root CAs for HTTPS. A name that already exists is left alone. Added names are recorded in `/data/nemesis/owned-cacerts`. |
 | `/data/nemesis/` | Created. Package database lives here. |
+| `/data/nemesis/livepatch/engine/porter.jar`, `porter.out` | `0644`. LivePatch dex engine and its output version. Without it a LivePatch install stops with "LivePatch engine missing". |
 | Dalvik | `rm` of `system@app@NEMESIS.apk@classes.dex` under `/data/dalvik-cache`, `/data/dalvik-cache/arm`, `/cache/dalvik-cache` **once at install**. |
 
 **Not written / not patched:** `Launcher_WP3`, `package_lists.xml`, Engineering Mode, Settings, `boot.img`, MICOM, `persist.sys.swverify`.

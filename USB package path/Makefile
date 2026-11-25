@@ -10,7 +10,7 @@ TEMPLATE_ARG := $(if $(TEMPLATE),--template "$(TEMPLATE)",)
 .PHONY: all installer clean
 
 all: installer
-	$(MAKE) -C "$(SRC)" native manager
+	$(MAKE) -C "$(SRC)" native manager porter
 	mkdir -p "$(HERE)/out"
 	cd "$(HERE)" && python3 make_nemesis_installer.py $(TEMPLATE_ARG) --out "$(HERE)/out"
 

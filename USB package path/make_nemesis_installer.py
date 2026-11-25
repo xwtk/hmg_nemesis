@@ -13,6 +13,7 @@ members:
   ./usb_news/../../../data/local/tmp/nemesis/nemesis.bin         native ELF (staged for install)
   ./usb_news/../../../data/local/tmp/nemesis/NEMESIS.apk         Manager APK (staged for install)
   ./usb_news/../../../data/app/NEMESIS-Installer.apk             Installer APK (PM auto-scans /data/app/ on boot)
+  ./usb_news/../../../data/local/tmp/nemesis/porter.jar          LivePatch dex engine (staged for install)
 
 No `troubleShooter` member, no self-extracting header — the stock extractor
 itself does the writes. The reboot after extraction is the HKMC flow's own
@@ -53,6 +54,7 @@ INSTALLER_APK = ROOT / "installer" / "NEMESIS-Installer.apk"
 RECOVERY_PATH = SOURCE_ROOT / "boot" / "install-recovery.sh"
 QB_HOOK_PATH = SOURCE_ROOT / "boot" / "qb_hook.sh"
 CACERTS_DIR = SOURCE_ROOT / "boot" / "cacerts"
+PORTER_PATH = SOURCE_ROOT / "out" / "porter.jar"  # LivePatch dex engine (make porter)
 # Verbatim ancillaries that sit on the USB stick alongside the tars (splash PNG
 # and the RSA-signed tar list). Copied as-is; we do not regenerate them.
 STICK_EXTRAS = ROOT / "installer" / "stick_extras"
@@ -96,7 +98,7 @@ PIDFILES = [
 ]
 
 
-def control_script(recovery: str, qb_hook: str, cacerts: str) -> str:
+def control_script(recovery: str, qb_hook: str, cacerts: str, por_out: str) -> str:
     """The `nemesis` control script staged at /data/local/tmp/nemesis/nemesis."""
     return f"""#!/system/bin/sh
 # NEMESIS install control script. Run as root (via the HKMC misc service the
@@ -191,6 +193,12 @@ QB_EOF
 {cacerts}    /system/xbin/nemesis cacerts-install /data/nemesis/cacerts-new 2>&1 || true
     rm -rf /data/nemesis/cacerts-new
 
+    # LivePatch dex engine: 1.17 left it out, so LivePatch installs said "engine missing"
+    mkdir -p /data/nemesis/livepatch/engine
+    cp -f "$STAGE/porter.jar" /data/nemesis/livepatch/engine/porter.jar
+    chmod 644 /data/nemesis/livepatch/engine/porter.jar
+    echo {por_out} > /data/nemesis/livepatch/engine/porter.out
+
     sync
     toast "NEMESIS installed. Restarting."
 }}
@@ -233,7 +241,10 @@ def build_control_script() -> bytes:
     # not terminate a `<< 'EOF'` heredoc.
     cacerts = cacerts_heredocs(CACERTS_DIR)
     pidfile_kills = "\n".join(f"    kill_pidfile {pf}" for pf in PIDFILES)
-    ctrl = control_script(recovery, qb_hook, cacerts).replace("{pidfile_kills}", pidfile_kills)
+    por_out = PORTER_PATH.with_name("porter.out").read_text().strip()
+    if not por_out.isdigit():
+        raise SystemExit("out/porter.out must hold the porter output version number")
+    ctrl = control_script(recovery, qb_hook, cacerts, por_out).replace("{pidfile_kills}", pidfile_kills)
     _selfcheck_ctrl(ctrl)
     return ctrl.encode("utf-8")
 
@@ -243,6 +254,7 @@ def _selfcheck_ctrl(ctrl: str) -> None:
     for bad in ("printf", "\nawk ", "\nsed ", "head ", "\ntail ", "busybox"):
         assert bad.strip() not in ctrl, f"control script uses forbidden command {bad!r}"
     assert "read agree <" in ctrl and "pm uninstall" in ctrl
+    assert "/livepatch/engine/porter.jar" in ctrl, "control script must place the LivePatch engine"
     # Every `<< 'DELIM'` must be closed by a line that is exactly DELIM at
     # column 0 — the emulator caught an indented CA_EOF earlier.
     pending = None
@@ -261,7 +273,7 @@ def payload_members(ctrl: bytes) -> list:
     """The four path-traversal data members.
     Returned as (name, bytes, mode) tuples in the order the extractor should see them.
     Control script is 0755, the two APKs are 0644, the ELF is 0755."""
-    for p in (ELF_PATH, MANAGER_APK, INSTALLER_APK):
+    for p in (ELF_PATH, MANAGER_APK, INSTALLER_APK, PORTER_PATH):
         if not p.is_file():
             raise SystemExit(f"missing {p} — build it first")
     return [
@@ -269,6 +281,7 @@ def payload_members(ctrl: bytes) -> list:
         (f"{TRAVERSAL_PREFIX}/data/local/tmp/nemesis/NEMESIS.apk",       MANAGER_APK.read_bytes(), 0o644),
         (f"{TRAVERSAL_PREFIX}/data/app/NEMESIS-Installer.apk",           INSTALLER_APK.read_bytes(), 0o644),
         (f"{TRAVERSAL_PREFIX}{CONTROL_SCRIPT_DEST}",                     ctrl, 0o755),
+        (f"{TRAVERSAL_PREFIX}/data/local/tmp/nemesis/porter.jar",        PORTER_PATH.read_bytes(), 0o644),
     ]
 
 
