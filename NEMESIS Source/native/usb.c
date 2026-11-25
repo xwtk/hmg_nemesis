@@ -27,21 +27,20 @@ static int looks_like_sys_remount(const char *cmd, int *rw_out) {
 }
 
 int cmd_remount(int argc, char **argv) {
-    int rw = 1;
-    if (argc >= 1) {
-        if (!strcmp(argv[0], "ro") || !strcmp(argv[0], "readonly")) rw = 0;
-        else if (!strcmp(argv[0], "rw") || !strcmp(argv[0], "readwrite")) rw = 1;
+    int rw = 1, bypass = 0, i;
+    for (i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "ro") || !strcmp(argv[i], "readonly")) rw = 0;
+        else if (!strcmp(argv[i], "rw") || !strcmp(argv[i], "readwrite")) rw = 1;
+        else if (!strcmp(argv[i], "--bypass-livepatch")) bypass = 1;
         else {
-            fprintf(stderr, "usage: nemesis remount [rw|ro]\n");
+            fprintf(stderr, "usage: nemesis remount [rw|ro] [--bypass-livepatch]\n");
             return 1;
         }
     }
-    /* A writer outside NEMESIS (HMG-API's uninstall over adb, a USB script): LivePatch's read-only
-     * farms step aside for it. Inside a job the hook around it already did. */
-    if (!getenv("NEMESIS_JOB")) {
-        if (rw) lp_step_aside("nemesis remount rw");
-        else lp_step_back("nemesis remount ro");
-    }
+    /* A writer that asks for it gets the real directories under LivePatch's read-only farms. Any `ro`
+     * puts them back (nothing to do when none stepped aside), so a plain `ro` can't leave them down. */
+    if (rw && bypass) lp_step_aside("nemesis remount rw --bypass-livepatch");
+    if (!rw) lp_step_back("nemesis remount ro");
     if (remount_system(rw) != 0) {
         fprintf(stderr, "remount /system %s failed\n", rw ? "rw" : "ro");
         return 1;

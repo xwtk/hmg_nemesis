@@ -998,7 +998,8 @@ static int row_ok(const lp_row *r) {
     return 1;
 }
 
-/* ---- step aside: farms are read-only, so a writer of /system gets the real directories ---- */
+/* ---- step aside (`nemesis remount --bypass-livepatch`): farms are read-only, so a writer of
+ * /system that asks for it gets the real directories ---- */
 
 static char aside_buf[LP_MAX * (MAX_PATH + 1)];
 
@@ -1014,7 +1015,7 @@ static int line_in(const char *buf, const char *line) {
 
 static int aside_has(const char *dir) { return aside_load() && line_in(aside_buf, dir); }
 
-/* Takes every farm down and lists its dir in LP_ASIDE; nested calls add to the list. */
+/* Takes every farm down and lists its dir in LP_ASIDE; a second call adds to the list. */
 void lp_step_aside(const char *why) {
     static lp_row rows[LP_MAX];
     char d[MAX_PATH];
@@ -2139,21 +2140,6 @@ int lp_check(const ini_file *ini, const char *id) {
     if (lp_props_check(ini, id) != 0) return 1;
     n = ini_targets(ini, tg, 0, LP_MAX);
     if (n < 0) return 1;
-    /* A file an HMG-API mod changed: its backup and LivePatch's stock would each hold the other's bytes.
-     * Not one HMG-API hands to LivePatch itself (its "hmgapi" package): that one chains. */
-    if (strcmp(id, "hmgapi")) {
-        static char hj[1 << 20];
-        char q[MAX_PATH + 4];
-        lp_step s;
-        if (read_file("/data/hmgapi/state/files.json", hj, sizeof(hj)) > 0)
-            for (i = 0; i < n; i++) {
-                snprintf(q, sizeof(q), "\"%s\"", tg[i].t);
-                if (strstr(hj, q) && step_in(LP_PKG "/hmgapi", tg[i].t, &s) != 0) {
-                    fprintf(stderr, "%s is changed by an HMG-API mod: remove that mod in HMG-API first\n", tg[i].t);
-                    return 1;
-                }
-            }
-    }
     for (i = 0; i < n; i++) need += file_size(tg[i].t);
     if (data_free() < need) {
         fprintf(stderr, "Not enough space on /data\n");
@@ -2162,19 +2148,13 @@ int lp_check(const ini_file *ini, const char *id) {
     return 0;
 }
 
-/* Around every package hook: the farms step aside so the hook writes the real directories, and a
- * hook touching a managed target is logged (09-LivePatch.md, 3.7). HMG-API's sync runs
- * (HMGAPI_NEMESIS_SYNC=1) write nothing: no churn. */
+/* Report-only: a hook that touches a managed target is logged (09-LivePatch.md, 3.7). */
 void lp_hook_watch(const char *hook, int after) {
     static struct { char t[MAX_PATH]; struct stat st; int ok; } hw[LP_MAX];
     static int hn;
     static lp_row rows[LP_MAX];
-    static int owner; /* a hook running `nemesis install` nests: only the outermost steps aside and back */
-    int i, n, quiet = getenv("HMGAPI_NEMESIS_SYNC") && !strcmp(getenv("HMGAPI_NEMESIS_SYNC"), "1");
+    int i, n;
     if (!after) {
-        owner = !getenv("NEMESIS_LP_HOOK");
-        if (owner) setenv("NEMESIS_LP_HOOK", hook, 1);
-        if (owner && !quiet) lp_step_aside(hook);
         n = lp_load(rows, LP_MAX);
         for (hn = 0; hn < n; hn++) {
             snprintf(hw[hn].t, sizeof(hw[hn].t), "%s", rows[hn].target);
@@ -2190,9 +2170,6 @@ void lp_hook_watch(const char *hook, int after) {
             log_msg("livepatch: hook %s changed %s (managed by LivePatch)", hook, hw[i].t);
     }
     hn = 0;
-    if (!owner) return;
-    unsetenv("NEMESIS_LP_HOOK");
-    if (!quiet) lp_step_back(hook);
 }
 
 static int selftest(void) {

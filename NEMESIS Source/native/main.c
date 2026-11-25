@@ -10,7 +10,7 @@ static void usage(void) {
             "nemesis compat <zip|package-id>\n"
             "nemesis pkg-launch <package-id>\n"
             "nemesis root [uid] [-c command]\n"
-            "nemesis remount [rw|ro]\n"
+            "nemesis remount [rw|ro] [--bypass-livepatch]\n"
             "nemesis service start|status|stop|list <package-id>/<name>\n"
             "nemesis log dump|logcat|dmesg|service ...\n"
             "nemesis update [--force] [--accept-risk] [--no-reboot] <zip>\n"

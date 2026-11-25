@@ -142,7 +142,7 @@ nemesis update [--force] [--accept-risk] [--no-reboot] <zip>
 nemesis cacerts-install <dir>
 nemesis usb-info [--list]
 nemesis root [uid] [-c command]
-nemesis remount [rw|ro]
+nemesis remount [rw|ro] [--bypass-livepatch]
 nemesis service start|status|stop|list <package-id>/<name>
 nemesis log dump|logcat|dmesg|service <package-id>/<name>
 nemesis livepatch status|safe on|off|repair <id>|discard <id>|selftest
@@ -162,6 +162,7 @@ Notes:
 - `service list` lines: `qname|mode|state|pid`.
 - `nemesis root` with no `-c` is an interactive root shell. `nemesis root -c 'id'` runs one command. Any UID may use this channel.
 - `nemesis remount rw` (or `ro`) remounts `/system` with `mount(2)` while keeping `nosuid`/`nodev`. Toolbox `mount -o remount,rw /system` returns `Operation not permitted` on this unit even as uid 0; do not use it. `nemesis root -c 'mount -o remount,rw /system'` is intercepted and uses the same path. Package hooks get `/data/nemesis/bin/mount` first on `PATH`.
+- Folders where a LivePatch package adds a new file stay read-only after `remount rw`. `remount rw --bypass-livepatch` also takes those overlays down, so a script outside NEMESIS can write the real folders; the next `remount ro` (with or without the flag) puts them back, and so does the next boot. The files LivePatch serves are not visible while the overlays are down. Packages should use `[file.N]` instead ([09 — LivePatch](09-LivePatch.md)).
 - `watchdog` / `svcmgr` / `usb-handler` are the long-running pieces. They are started at boot; you do not start them from Manager.
 - `wipe --confirm` is required; `nemesis wipe` alone prints usage. Wipe reboots the unit unless `--no-reboot` is passed.
 

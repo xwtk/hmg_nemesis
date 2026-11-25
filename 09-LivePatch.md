@@ -55,7 +55,6 @@ When the queue is empty, the Manager counts down a reboot: **Restart Now**, or *
 | `<file>: <pkg> already replaces it` | Another package already has a `[file.N]` on the same target |
 | `<file>: a replacement file must come first in the chain (<pkg> changes it)` | A `[file.N]` would go on top of another package's `[patch.N]` |
 | `livepatch-first takes only [file.N] and [prop.N], not [patch.N]` | A `livepatch-first` package has a `[patch.N]` (see 3.8) |
-| `<target> is changed by an HMG-API mod: remove that mod in HMG-API first` | HMG-API writes that file itself (HMG-API older than its LivePatch support, or NEMESIS below 1.17.1 when it last applied) |
 
 The full tool and porter output is in `livepatch-<id>.log` in the NEMESIS log folder.
 
@@ -213,6 +212,7 @@ Build and install it the same way as any other package (see [05 - Packages](05-P
 
 - Targets must be under `/system/`. Paths with `..` are refused.
 - Do not also write the target from a hook. LivePatch owns what is mounted there.
+- A folder where a package adds a new file is served through a read-only overlay. Hooks cannot write into it, and neither can a plain `nemesis remount rw`. Put files there with `[file.N]`; a tool that manages files itself uses 3.8. A script outside NEMESIS that must write the real folder runs `nemesis remount rw --bypass-livepatch`, which takes the overlays down until the next `nemesis remount ro` or boot.
 - A new class or member that collides with one from a package below it is renamed `<name>$nms<pos>`, and renamed back when that package is uninstalled. Do not depend on reflection by the name you added.
 - Test the package on the unit with another package that patches the same target, installed in both orders. Each uninstall must leave the other package working.
 

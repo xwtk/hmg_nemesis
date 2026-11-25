@@ -88,13 +88,12 @@ OR
 
 ### 1.17.1
 
-- **Packages that change system files** can write to folders LivePatch serves again, such as `/system/lib` with Enhanced Projection installed. `nemesis remount rw` and `ro` do the same for scripts outside NEMESIS, so HMG-API 1.1.0-rc.9 or newer installs and uninstalls next to LivePatch packages.
 - **NEMESIS 1.17 and later refuse to install** over HMG-API older than 1.1.0-rc.9, or, without HMG-API, over a modified `app_process`. The installer, the troubleshooter and the core update show why and change nothing. See [04 - Install and Uninstall](04-Install-and-Uninstall.md#units-nemesis-117-and-later-refuse).
 - **Package Store** shows "Retrieving data…" with a spinner until the list has fully loaded, instead of the connection error. The connection error is now laid out on separate lines.
 - **LivePatch safe mode** no longer turns on after a single Android restart.
+- **`nemesis remount rw --bypass-livepatch`** lets a script outside NEMESIS write folders LivePatch serves read-only, such as `/system/lib` with Enhanced Projection installed. The next `nemesis remount ro` or boot puts LivePatch's view back. Packages use `[file.N]` instead.
 - **"LivePatch engine missing".** The 1.17 USB update package didn't install the LivePatch engine, and neither did the 1.17 in-app update on a unit coming from 1.16.x (the older updater skips the engine files). LivePatch packages with a dex patch then failed to install. The 1.17.1 USB package installs the engine, and the 1.17.1 update installs it from any 1.16.x or 1.17.
 - **NEMESIS uninstall** from USB puts Android's start-up file back again. When the `nemesis` binary was already gone, the 1.17 script left NEMESIS's start-up script in place, because the head unit's `mv` rejects `-f`.
-- A LivePatch package is refused when an HMG-API mod already changes the same file. Remove that mod in HMG-API first.
 - **Tools that manage files, such as HMG-API,** can hand their results to LivePatch instead of writing `/system`. A package with `livepatch-first=1` puts its `[file.N]` outputs under every other package's patches, and `nemesis livepatch stock` gives the stock bytes under any output. HMG-API needs its own support for this; see [09 - LivePatch](09-LivePatch.md#38-tools-that-manage-files-themselves-livepatch-first).
 - A `[file.N]` refused because another package is on the same file now names that package.
 - **Sources.** A fresh clone builds and passes its host tests again: `enhanced.projection/native/converter.c` is back, and the build and tests skip the parts that are not published (listed in `.gitignore`). `projection.tbt` is removed; `enhanced.projection` replaces it.
