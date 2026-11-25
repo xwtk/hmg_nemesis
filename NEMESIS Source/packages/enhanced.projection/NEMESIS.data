@@ -9,9 +9,8 @@ detailed-desc="Enhanced Phone Projection:
 - Wireless CarPlay
 - Turn-by-Turn on cluster and HUD
 - Improved Android Auto
-For 131 Kia/Hyundai S5W_M builds on V015.011, V015.012 and V039.001. Other builds are refused at install, see the log.
 Fixes CarPlay TBT and freezes."
-os="*.V015.012.260507, *.V015.011.260206, *.V039.001.260902, *.V016.010.260903"
+os=any
 models=any
 depends=usb-handler@>=1.17,wireless.projection,!wireless.carplay.aa
 preinstall=scripts/pre.sh
