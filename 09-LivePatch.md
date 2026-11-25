@@ -52,6 +52,10 @@ When the queue is empty, the Manager counts down a reboot: **Restart Now**, or *
 | `<file>: patching failed: <reason>` | An `exec` tool failed. The reason is the last line it printed |
 | `Not enough space on /data` | Checked before any work starts |
 | `[patch.N]: <target> matches no file` | A required target is missing on this firmware |
+| `<file>: <pkg> already replaces it` | Another package already has a `[file.N]` on the same target |
+| `<file>: a replacement file must come first in the chain (<pkg> changes it)` | A `[file.N]` would go on top of another package's `[patch.N]` |
+| `livepatch-first takes only [file.N] and [prop.N], not [patch.N]` | A `livepatch-first` package has a `[patch.N]` (see 3.8) |
+| `<target> is changed by an HMG-API mod: remove that mod in HMG-API first` | HMG-API writes that file itself (HMG-API older than its LivePatch support, or NEMESIS below 1.17.1 when it last applied) |
 
 The full tool and porter output is in `livepatch-<id>.log` in the NEMESIS log folder.
 
@@ -62,6 +66,7 @@ nemesis livepatch status          # wrapper=N safe=N, then one line per target: 
 nemesis livepatch safe on|off     # force stock at the next boot, or leave safe mode
 nemesis livepatch repair <id>     # rebuild a package's outputs
 nemesis livepatch discard <id>    # drop a package's outputs and show stock
+nemesis livepatch stock <target> <dest>   # copy the stock file under any output; exit 2 if stock has none
 nemesis livepatch selftest
 nemesis prop get <key>
 nemesis prop set <key> <value>
@@ -210,6 +215,22 @@ Build and install it the same way as any other package (see [05 - Packages](05-P
 - Do not also write the target from a hook. LivePatch owns what is mounted there.
 - A new class or member that collides with one from a package below it is renamed `<name>$nms<pos>`, and renamed back when that package is uninstalled. Do not depend on reflection by the name you added.
 - Test the package on the unit with another package that patches the same target, installed in both orders. Each uninstall must leave the other package working.
+
+### 3.8 Tools that manage files themselves (`livepatch-first`)
+
+A mod manager such as HMG-API builds whole files from its own mods and hands the results to LivePatch instead of writing `/system`. Its package sets this in `[nemesis]`:
+
+```ini
+[nemesis]
+livepatch-first=1
+```
+
+- Its `[file.N]` outputs go under every other package's steps on the same target, whatever the install order. An update re-ports the chains above it.
+- It may hold only `[file.N]` and `[prop.N]`. A `[patch.N]` is refused.
+- Another package's `[file.N]` on the same target is still refused (`already replaces it`).
+- `nemesis livepatch stock <target> <dest>` gives the tool the stock bytes to build from, even while outputs are mounted over them.
+- A tool running inside a NEMESIS job (a package hook) must hand its package over with `nemesis queue add --move <zip>`, not `nemesis install`. A second install waits for the running job's lock and never gets it.
+- Changes apply at the next NEMESIS restart. The Manager counts it down when the queue is empty.
 
 ---
 

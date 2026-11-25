@@ -1435,7 +1435,8 @@ static int build_target(const char *id, const char *target, const char *stockp, 
         snprintf(nxt, sizeof(nxt), "%s/step%d", LP_TMP, k);
         if (s->kind == 0) {
             if (k) {
-                fprintf(stderr, "%s: a replacement file must come first in the chain\n", name);
+                if (ch[0].kind == 0) fprintf(stderr, "%s: %s already replaces it\n", name, ch[0].name);
+                else fprintf(stderr, "%s: a replacement file must come first in the chain (%s changes it)\n", name, ch[0].name);
                 return -1;
             }
             ui_text("Adding ", name, "");
@@ -1577,7 +1578,8 @@ static int stage_pkg(const char *id, const ini_file *ini, const char *name, cons
     char sec[24], s[MAX_PATH], t[MAX_PATH];
     int k, f, i, ns = 0, mine, seq = max_seq(id, &mine) + 1;
     size_t o;
-    if (mine) seq = mine; /* an update keeps its place in the chains */
+    if (opt_set(ini, "nemesis", "livepatch-first")) seq = 0; /* replacements under every other package (HMG-API) */
+    else if (mine) seq = mine; /* an update keeps its place in the chains */
     rm_rf(pdir);
     mkdir_p(pdir, 0700);
     o = snprintf(text, sizeof(text), "[livepatch]\nid=%s\nseq=%d\nversion=%s\nname=%s\n", id, seq, version ? version : "",
@@ -2125,17 +2127,28 @@ int lp_check(const ini_file *ini, const char *id) {
     long long need = DATA_FLOOR;
     int n, i;
     if (!has_lp_sections(ini)) return 0;
+    if (opt_set(ini, "nemesis", "livepatch-first"))
+        for (i = 1; i < 100; i++) {
+            char sec[24];
+            snprintf(sec, sizeof(sec), "patch.%d", i);
+            if (ini_has_section(ini, sec)) {
+                fprintf(stderr, "livepatch-first takes only [file.N] and [prop.N], not [%s]\n", sec);
+                return 1;
+            }
+        }
     if (lp_props_check(ini, id) != 0) return 1;
     n = ini_targets(ini, tg, 0, LP_MAX);
     if (n < 0) return 1;
-    /* A file an HMG-API mod changed: its backup and LivePatch's stock would each hold the other's bytes. */
-    {
+    /* A file an HMG-API mod changed: its backup and LivePatch's stock would each hold the other's bytes.
+     * Not one HMG-API hands to LivePatch itself (its "hmgapi" package): that one chains. */
+    if (strcmp(id, "hmgapi")) {
         static char hj[1 << 20];
         char q[MAX_PATH + 4];
+        lp_step s;
         if (read_file("/data/hmgapi/state/files.json", hj, sizeof(hj)) > 0)
             for (i = 0; i < n; i++) {
                 snprintf(q, sizeof(q), "\"%s\"", tg[i].t);
-                if (strstr(hj, q)) {
+                if (strstr(hj, q) && step_in(LP_PKG "/hmgapi", tg[i].t, &s) != 0) {
                     fprintf(stderr, "%s is changed by an HMG-API mod: remove that mod in HMG-API first\n", tg[i].t);
                     return 1;
                 }
@@ -2217,6 +2230,31 @@ int cmd_livepatch(int argc, char **argv) {
         return 0;
     }
     if (!strcmp(op, "selftest")) return selftest();
+    if (!strcmp(op, "stock") && argc > 2) {
+        /* the stock bytes under any output, for tools that build their own (HMG-API): 2 = no stock file.
+         * Its own view: LP_LOWER belongs to a job that may be porting right now. */
+        char low[MAX_PATH], sv[MAX_PATH];
+        int r;
+        if (strncmp(argv[1], "/system/", 8) || strstr(argv[1], "..")) {
+            fprintf(stderr, "target must be a /system/... path\n");
+            return 1;
+        }
+        lp_dirs();
+        snprintf(low, sizeof(low), "%s.%d", LP_LOWER, (int)getpid());
+        mkdir_p(low, 0700);
+        if (mount("/system", low, NULL, MS_BIND, NULL) != 0) {
+            fprintf(stderr, "LivePatch cannot read the stock files\n");
+            rmdir(low);
+            return 1;
+        }
+        mount(NULL, low, NULL, MS_PRIVATE, NULL);
+        snprintf(sv, sizeof(sv), "%s%s", low, argv[1] + 7);
+        r = !is_file(sv) ? 2 : copy_file(sv, argv[2], 0) == 0 ? 0 : 1;
+        umount2(low, MNT_DETACH);
+        rmdir(low);
+        if (r == 1) fprintf(stderr, "cannot copy %s to %s\n", argv[1], argv[2]);
+        return r;
+    }
     if (!strcmp(op, "safe") && argc > 1) {
         mkdir_p(LP_DIR, 0711);
         if (!strcmp(argv[1], "on")) {
@@ -2238,7 +2276,7 @@ int cmd_livepatch(int argc, char **argv) {
     if (!strcmp(op, "wrapper") || !strcmp(op, "unwrap")) remount_system(1);
     if (!strcmp(op, "wrapper")) return lp_wrapper_install() == 0 ? 0 : 1;
     if (!strcmp(op, "unwrap")) return lp_wrapper_remove() == 0 ? 0 : 1;
-    fprintf(stderr, "nemesis livepatch status|safe on|off|wrapper|unwrap|repair <id>|discard <id>|selftest\n");
+    fprintf(stderr, "nemesis livepatch status|safe on|off|wrapper|unwrap|repair <id>|discard <id>|stock <target> <dest>|selftest\n");
     return 1;
 }
 

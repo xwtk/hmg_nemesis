@@ -43,6 +43,7 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 | `postinstall` | no | Script run **after** copy, APK install, and service register; cwd = `/data/nemesis/apps/<id>` |
 | `preuninstall` | no | Script run after services are stopped, before APKs/`rm` |
 | `postuninstall` | no | Copied to tmp then run so it still exists after the tree is deleted |
+| `livepatch-first` | no | `1`: this package's `[file.N]` outputs go under every other package's LivePatch steps. For tools that manage files themselves. See [09 - LivePatch](09-LivePatch.md#38-tools-that-manage-files-themselves-livepatch-first). |
 
 A package may also carry `[patch.N]`, `[file.N]` and `[prop.N]` sections to change stock files and properties without writing `/system`. See [09 - LivePatch](09-LivePatch.md).
 

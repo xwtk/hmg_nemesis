@@ -93,6 +93,8 @@ OR
 - **"LivePatch engine missing".** The 1.17 USB update package didn't install the LivePatch engine, so LivePatch packages failed to install on units set up from USB. The 1.17.1 USB package and the in-app update both install it.
 - **NEMESIS uninstall** from USB puts Android's start-up file back again. When the `nemesis` binary was already gone, the 1.17 script left NEMESIS's start-up script in place, because the head unit's `mv` rejects `-f`.
 - A LivePatch package is refused when an HMG-API mod already changes the same file. Remove that mod in HMG-API first.
+- **Tools that manage files, such as HMG-API,** can hand their results to LivePatch instead of writing `/system`. A package with `livepatch-first=1` puts its `[file.N]` outputs under every other package's patches, and `nemesis livepatch stock` gives the stock bytes under any output. HMG-API needs its own support for this; see [09 - LivePatch](09-LivePatch.md#38-tools-that-manage-files-themselves-livepatch-first).
+- A `[file.N]` refused because another package is on the same file now names that package.
 - **Sources.** A fresh clone builds and passes its host tests again: `enhanced.projection/native/converter.c` is back, and the build and tests skip the parts that are not published (listed in `.gitignore`). `projection.tbt` is removed; `enhanced.projection` replaces it.
 
 ### 1.17

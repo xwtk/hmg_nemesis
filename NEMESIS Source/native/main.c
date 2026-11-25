@@ -24,7 +24,7 @@ static void usage(void) {
             "nemesis ota-block on|off|status\n"
             "nemesis selinux on|off|status|cmdline\n"
             "nemesis prop get|set|del <key> [value]\n"
-            "nemesis livepatch status|safe on|off|wrapper|unwrap|repair <id>|discard <id>|selftest\n"
+            "nemesis livepatch status|safe on|off|wrapper|unwrap|repair <id>|discard <id>|stock <target> <dest>|selftest\n"
             "nemesis adb usb-on|usb-off|tcp-on|tcp-off|status\n"
             "nemesis watchdog | svcmgr | usb-handler | ping\n");
 }
