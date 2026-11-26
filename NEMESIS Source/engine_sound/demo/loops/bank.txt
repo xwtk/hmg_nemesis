@@ -1,19 +1,14 @@
-g37|Infiniti G37|g37_1500.wav|1500
-g37|Infiniti G37|g37_2000.wav|2000
-g37|Infiniti G37|g37_3000.wav|3000
-g37|Infiniti G37|g37_3300.wav|3300
-g37|Infiniti G37|g37_3800.wav|3800
-g37|Infiniti G37|g37_4400.wav|4400
-g37|Infiniti G37|g37_4800.wav|4800
-g37|Infiniti G37|g37_5700.wav|5700
-g37|Infiniti G37|g37_6300.wav|6300
-g37|Infiniti G37|g37_6900.wav|6900
-g37|Infiniti G37|g37_7300.wav|7300
+v8|V8|v8_2000.wav|2000
+v8|V8|v8_2250.wav|2250
+v8|V8|v8_2600.wav|2600
+v8|V8|v8_2950.wav|2950
+v8|V8|v8_3300.wav|3300
+v8|V8|v8_3650.wav|3650
+v8|V8|v8_4000.wav|4000
+v8|V8|v8_4300.wav|4300
 honda|Honda 3.2 V6|honda_680.wav|680
 honda|Honda 3.2 V6|honda_2300.wav|2300
 honda|Honda 3.2 V6|honda_3200.wav|3200
-c43|Mercedes C43 V6|c43_1760.wav|1760
-c43|Mercedes C43 V6|c43_5280.wav|5280
 bac|BAC Mono|bac_on_3000.wav|3000|on_low
 bac|BAC Mono|bac_on_6500.wav|6500|on_high
 bac|BAC Mono|bac_off_3000.wav|3000|off_low
@@ -29,3 +24,11 @@ procar|BMW M1 Procar|procar_on_8000.wav|8000|on_high
 procar|BMW M1 Procar|procar_off_3400.wav|3400|off_low
 procar|BMW M1 Procar|procar_off_8430.wav|8430|off_high
 procar|BMW M1 Procar|procar_lim_8000.wav|8000|limiter
+gt|GT FUSION V8|gt_lim_8100.wav|8100|limiter
+gt|GT FUSION V8|gt_off_2100.wav|2100|off_2
+gt|GT FUSION V8|gt_off_4800.wav|4800|off_3
+gt|GT FUSION V8|gt_off_7200.wav|7200|off_4
+gt|GT FUSION V8|gt_off_880.wav|880|off_1
+gt|GT FUSION V8|gt_on_1900.wav|1900|on_1
+gt|GT FUSION V8|gt_on_4100.wav|4100|on_2
+gt|GT FUSION V8|gt_on_7200.wav|7200|on_3

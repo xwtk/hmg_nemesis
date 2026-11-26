@@ -17,7 +17,7 @@ import com.nemesis.enginesound.audio.NaviBus;
 import com.nemesis.enginesound.model.Gearbox;
 import com.nemesis.enginesound.model.Inputs;
 import com.nemesis.enginesound.synth.EngineVoice;
-import com.nemesis.enginesound.synth.V6Synth;
+import com.nemesis.enginesound.synth.SampleVoice;
 import com.nemesis.enginesound.vehicle.VehicleProbe;
 import com.nemesis.enginesound.vehicle.VehicleSnapshot;
 
@@ -139,7 +139,8 @@ public final class EngineSoundService extends Service {
     private EngineVoice openVoice(String id) {
         EngineVoice recorded = LoopBank.open(this, id);
         if (recorded != null) return recorded;
-        return V6Synth.byId(id, CabinTrack.SAMPLE_RATE);
+        // A saved pick from an older build (G37, C43, generated) falls back to the V8.
+        return LoopBank.open(this, SampleVoice.V8);
     }
 
     private void step() {

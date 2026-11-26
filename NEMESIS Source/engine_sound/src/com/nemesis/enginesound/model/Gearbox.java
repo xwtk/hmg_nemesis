@@ -127,7 +127,8 @@ public final class Gearbox {
                 crankFrom = rpm;
             }
         }
-        intake += (pedal - intake) * blend(dt, pedal >= intake ? 1.0f : 0.7f);
+        // Throttle answers the foot at once; the slow part is the flywheel, not the air.
+        intake += (pedal - intake) * blend(dt, pedal >= intake ? 0.12f : 0.25f);
         trackAccel(kmh, dt);
         int mode = modeOf(in.shifter, kmh);
         boolean free = mode == 0 || (kmh < 2f && pedal > 0.02f && in.brake);

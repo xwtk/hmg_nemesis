@@ -21,7 +21,6 @@ test:
 	$(JAVAC) -source 1.7 -target 1.7 -d host-out \
 		$(shell find src/com/nemesis/enginesound/model src/com/nemesis/enginesound/synth host -name '*.java' | sort)
 	java -cp host-out com.nemesis.enginesound.model.GearboxHostTest
-	java -cp host-out com.nemesis.enginesound.synth.SynthHostTest
 	java -cp host-out com.nemesis.enginesound.synth.SampleVoiceHostTest
 	java -cp host-out com.nemesis.enginesound.synth.ThrottleVoiceHostTest
 	java -cp host-out com.nemesis.enginesound.model.GearboxTrace > host-out/trace-java.txt

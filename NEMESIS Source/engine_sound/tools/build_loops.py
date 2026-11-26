@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cut loopable stereo clips from the Honda 3.2 and Mercedes C43 recordings.
+"""Cut loopable stereo clips from the Honda 3.2 recordings (``v8``: the AVATR 07 sweep).
 
 Each clip is an integer number of exhaust pulses so it can repeat, with a
 short crossfade at the join. Outputs raw PCM for the head unit and WAV for
@@ -29,15 +29,6 @@ TAKES = [
      17.6, 160.0, 1.0, 3200),
 ]
 
-# Measured pulse rate in the C43 take. 1760 is the early passage (also used
-# down at 1100). 3100 and 5000 are separate louder moments; 5000 is several
-# of them joined, so the 5k slider is not one short clip played faster.
-C43_FILE = "772801__jerryberumen__mercedes-benz-c43-amg-exhaust-rev-slow-rear.wav"
-C43_LAYERS = [
-    (1760, [(0.25, 86.3, 1.35)]),
-    (3100, [(9.15, 159.8, 1.05), (20.35, 154.7, 1.05)]),
-    (5000, [(13.55, 165.2, 1.15), (19.55, 167.0, 1.15)]),
-]
 FADE_S = 0.016
 
 
@@ -179,102 +170,79 @@ def main():
     with open(bank, "w") as f:
         for car, label, name, rpm, dur, score in catalog:
             f.write("%s|%s|%s.wav|%d\n" % (car, label, name, rpm))
-    c43 = os.path.join(ROOT, C43_FILE)
-    if c43 not in cache:
-        cache[c43] = load_stereo(c43)
-    for rpm, slices in C43_LAYERS:
-        seg, jump = assemble([cut_slice(cache[c43], t, hz, dur) for t, hz, dur in slices])
-        name = "c43_%d" % rpm
-        write_pcm(os.path.join(OUT_PCM, name + ".pcm"), seg)
-        write_wav(os.path.join(OUT_WAV, name + ".wav"), seg)
-        with open(bank, "a") as f:
-            f.write("c43|Mercedes C43 V6|%s.wav|%d\n" % (name, rpm))
-        catalog.append(("c43", "Mercedes C43 V6", name, rpm, len(seg) / SR, jump))
-        print("%s rpm %d  %.2fs  %d slices  jump %.4f" % (name, rpm, len(seg) / SR, len(slices), jump))
-    for stale_name in ("c43_960", "c43_5280"):
-        for folder in (OUT_PCM, OUT_WAV):
-            ext = ".pcm" if folder == OUT_PCM else ".wav"
-            stale = os.path.join(folder, stale_name + ext)
-            if os.path.exists(stale):
-                os.remove(stale)
     print("wrote", len(catalog), "loops")
 
 
-# Infiniti G37S coupe only. Low layers are the first-gear pull from the
-# listener's map. 2600 at 1.9s sits on a knock, so that layer is the clean
-# stretch just after it (about 3000). 4400 and 4800 stay in that pull, longer
-# than before. 5700-7300 are the slower second-gear run (4.2s=5400 … 6.1s=7400),
-# half a second instead of a tenth, and they stop before the 6.3s shift.
-G37_LAYERS = [
-    (1500, [("S", 1.40, 0.20)]),
-    (2000, [("S", 1.58, 0.16)]),
-    (3000, [("S", 2.00, 0.18)]),
-    (3300, [("S", 2.16, 0.16)]),
-    (3800, [("S", 2.36, 0.18)]),
-    (4400, [("S", 2.58, 0.28)]),
-    (4800, [("S", 2.82, 0.28)]),
-    (5700, [("S", 4.30, 0.48)]),
-    (6300, [("S", 4.88, 0.42)]),
-    (6900, [("S", 5.34, 0.40)]),
-    (7300, [("S", 5.80, 0.30)]),
+# AVATR 07 "V8" sound, a 4 s rising sweep pulled from the car (sources/avatr07).
+# The firing tone is 4th order, so rpm = 15 x its frequency: 1650 at the start,
+# 4550 at the end, with small shift dips at 0.85 s and 1.5 s. The first 0.3 s
+# fades in and the last 0.4 s fades out, so neither is used.
+V8_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "avatr07", "V8.wav")
+V8_LAYERS = [
+    (2000, [("V", 0.40, 0.18)]),
+    (2250, [("V", 0.92, 0.16)]),
+    (2600, [("V", 1.60, 0.16)]),
+    (2950, [("V", 1.98, 0.12)]),
+    (3300, [("V", 2.28, 0.12)]),
+    (3650, [("V", 2.62, 0.12)]),
+    (4000, [("V", 3.00, 0.14)]),
+    (4300, [("V", 3.38, 0.14)]),
 ]
 
 
-def g37_paths():
-    found = {}
-    for path in glob.glob(os.path.join(ROOT, "*.mp3")):
-        base = os.path.basename(path)
-        if "G37x" in base:
-            found["x"] = path
-        elif "G37S" in base or "Coup" in base:
-            found["S"] = path
-        elif "G37" in base:
-            found["100"] = path
-    return found
+def build_v8():
+    if not os.path.exists(V8_PATH):
+        raise SystemExit("missing " + V8_PATH)
+    # One engine cycle (two revs) per pulse, so the 4.5th-order tone also loops.
+    build_sweep("v8", "V8", {"V": V8_PATH}, V8_LAYERS, 120.0)
 
 
-def build_g37():
-    paths = g37_paths()
-    if "S" not in paths:
-        raise SystemExit("missing G37S recording")
+def build_sweep(car, label, paths, layers, pulses_div):
+    """Cut one loop per layer from a sweep. pulses_div: rpm / pulse Hz."""
     os.makedirs(OUT_PCM, exist_ok=True)
     os.makedirs(OUT_WAV, exist_ok=True)
     cache = {}
     lines = []
-    for rpm, slices in G37_LAYERS:
+    for rpm, slices in layers:
         chunks = []
         for key, start, length in slices:
             if key not in cache:
                 cache[key] = load_stereo(paths[key])
-            chunks.append(cut_slice(cache[key], start, rpm / 20.0, length))
+            chunks.append(cut_slice(cache[key], start, rpm / pulses_div, length))
         seg, jump = assemble(chunks)
-        name = "g37_%d" % rpm
+        name = "%s_%d" % (car, rpm)
         write_pcm(os.path.join(OUT_PCM, name + ".pcm"), seg)
         write_wav(os.path.join(OUT_WAV, name + ".wav"), seg)
-        lines.append("g37|Infiniti G37|%s.wav|%d\n" % (name, rpm))
+        lines.append("%s|%s|%s.wav|%d\n" % (car, label, name, rpm))
         print("%s  t %.2f  %.2fs  jump %.4f" % (name, slices[0][1], len(seg) / SR, jump))
     bank = os.path.join(OUT_WAV, "bank.txt")
     kept = []
+    at = None
     if os.path.exists(bank):
         with open(bank) as handle:
             for line in handle:
-                if line.startswith("g37|") or not line.strip():
+                if line.startswith(car + "|"):
+                    if at is None:
+                        at = len(kept)
                     continue
-                kept.append(line if line.endswith("\n") else line + "\n")
+                if line.strip():
+                    kept.append(line if line.endswith("\n") else line + "\n")
+    # The car keeps its place in the list; a new car goes last.
+    if at is None:
+        at = len(kept)
     with open(bank, "w") as handle:
-        handle.writelines(lines)
-        handle.writelines(kept)
-    keep = set("g37_%d" % rpm for rpm, _slices in G37_LAYERS)
+        handle.writelines(kept[:at] + lines + kept[at:])
+    keep = set("%s_%d" % (car, rpm) for rpm, _slices in layers)
     for folder, ext in ((OUT_PCM, ".pcm"), (OUT_WAV, ".wav")):
-        for path in glob.glob(os.path.join(folder, "g37_*" + ext)):
+        for path in glob.glob(os.path.join(folder, car + "_*" + ext)):
             stem = os.path.splitext(os.path.basename(path))[0]
             if stem not in keep:
                 os.remove(path)
-    print("wrote", len(lines), "g37 loops")
+    print("wrote", len(lines), car, "loops")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "g37":
-        build_g37()
+    if len(sys.argv) > 1 and sys.argv[1] == "v8":
+        build_v8()
     else:
         main()

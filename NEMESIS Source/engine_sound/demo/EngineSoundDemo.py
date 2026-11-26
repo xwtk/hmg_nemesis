@@ -129,27 +129,36 @@ def render(car, rpm, pedal, volume, frames, limiter):
     return bytes(data), active
 
 
+def spread(rpm, band):
+    """Equal-power crossfade between the two band points around rpm; the ends hold."""
+    last = len(band) - 1
+    gain = [0.0] * (last + 1)
+    k = 0
+    while k < last and rpm >= band[k + 1]:
+        k += 1
+    span = band[k + 1] - band[k] if k < last else 0.0
+    if span > 1:
+        u = max(0.0, (rpm - band[k]) / span)
+        gain[k] = math.cos(u * math.pi * 0.5)
+        gain[k + 1] = math.sin(u * math.pi * 0.5)
+    else:
+        gain[k] = 1.0
+    return gain
+
+
 def render_throttle(car, rpm, pedal, volume, frames, limiter):
-    """Throttle against overrun, and the low recording against the high one."""
+    """Throttle against overrun, and each set's loops crossfaded by RPM."""
     slots = car["slots"]
-    low_rpm = slots["on_low"]["rpm"]
-    high_rpm = slots["on_high"]["rpm"]
-    span = high_rpm - low_rpm
-    u = (rpm - low_rpm) / span if span > 1 else 0.0
-    if u < 0:
-        u = 0.0
-    elif u > 1:
-        u = 1.0
-    low = math.cos(u * math.pi * 0.5)
-    high = math.sin(u * math.pi * 0.5)
-    on = math.sin(max(0.0, min(1.0, pedal)) * math.pi * 0.5)
-    off = math.cos(max(0.0, min(1.0, pedal)) * math.pi * 0.5)
-    layers = [
-        (slots.get("on_low"), on * low),
-        (slots.get("on_high"), on * high),
-        (slots.get("off_low"), off * low),
-        (slots.get("off_high"), off * high),
-    ]
+    on = sorted((l for r, l in slots.items() if r.startswith("on_")), key=lambda l: l["rpm"])
+    off = sorted((l for r, l in slots.items() if r.startswith("off_")), key=lambda l: l["rpm"])
+    # The older cars crossfade both sets on the throttle pair; GT uses each set's own points.
+    legacy = [slots["on_low"]["rpm"], slots["on_high"]["rpm"]] if "on_low" in slots else None
+    p = max(0.0, min(1.0, pedal))
+    layers = []
+    for loops, amt in ((on, math.sin(p * math.pi * 0.5)), (off, math.cos(p * math.pi * 0.5))):
+        band = legacy or [l["rpm"] for l in loops]
+        for loop, g in zip(loops, spread(rpm, band)):
+            layers.append((loop, amt * g))
     if limiter and slots.get("limiter"):
         layers.append((slots["limiter"], 1.0))
     out = [0.0] * (frames * 2)
@@ -441,7 +450,8 @@ class Gearbox(object):
                 self.crank = True
                 self.crank_t = 0.0
                 self.crank_from = self.rpm
-        self.intake += (pedal - self.intake) * _blend(dt, 1.0 if pedal >= self.intake else 0.7)
+        # Throttle answers the foot at once; the slow part is the flywheel, not the air.
+        self.intake += (pedal - self.intake) * _blend(dt, 0.12 if pedal >= self.intake else 0.25)
         self._track_accel(kmh, dt)
         mode = self.mode_of(shifter, kmh)
         free = mode == 0 or (kmh < 2.0 and pedal > 0.02 and brake)
@@ -763,8 +773,8 @@ def drive_check():
 
 def check():
     cars = load_bank()
-    honda = cars[0]
-    data, active = render(honda, 680, 1.0, 1.0, SR, False)
+    first = cars[0]
+    data, active = render(first, 780, 1.0, 1.0, SR, False)
     samples = struct.unpack("<%dh" % (len(data) // 2), data)
     acc = 0.0
     for i in range(0, len(samples), 2):
@@ -864,7 +874,8 @@ def main():
         drive.reset()
         play = {"rpm": drive.box.rpm, "pedal": 0.0}
         out = open_out(lambda: state["run"])
-        frames = 2048
+        # Two of these stay queued: ~46 ms from pedal to speaker.
+        frames = 1024
         dt = frames / float(SR)
         try:
             while state["run"]:

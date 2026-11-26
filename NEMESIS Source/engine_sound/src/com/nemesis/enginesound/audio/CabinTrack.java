@@ -37,7 +37,8 @@ public final class CabinTrack {
             Log.e(TAG, error);
             return false;
         }
-        int bytes = Math.max(min, SAMPLE_RATE / 5 * 4);
+        // ~60 ms queued. Every byte here is delay between the pedal and the speaker.
+        int bytes = Math.max(min, SAMPLE_RATE / 16 * 4);
         try {
             track = new AudioTrack(
                     NaviBus.STREAM_ALERT,

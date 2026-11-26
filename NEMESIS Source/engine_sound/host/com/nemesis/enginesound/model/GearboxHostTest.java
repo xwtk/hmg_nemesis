@@ -21,6 +21,7 @@ public final class GearboxHostTest {
         driveLeavesTheFlare();
         shutdownGlides();
         liftOffCoastsDown();
+        pressAnswersAtOnce();
         pullShiftsAreSmooth();
         coastHoldsGear();
         System.out.println("gearbox ok");
@@ -221,11 +222,23 @@ public final class GearboxHostTest {
         check(high > 2500f, "revved " + high);
         Inputs off = new Inputs(true, 0f, 0f, false, Shifter.P);
         g.update(0.05f, off);
-        check(g.rpm > high - 30f, "lift first step " + g.rpm + " from " + high);
+        // Flywheel pace from the first step: about 1100 rpm/s near redline, no cliff.
+        check(g.rpm > high - 80f, "lift first step " + g.rpm + " from " + high);
         for (int i = 0; i < 19; i++) g.update(0.05f, off);
         check(g.rpm > high - 1200f, "lift dumped " + g.rpm + " from " + high);
         for (int i = 0; i < 260; i++) g.update(0.05f, off);
         check(g.rpm < Gearbox.IDLE + 30f, "lift never settled " + g.rpm);
+    }
+
+    /** Pressing the pedal must be heard within a tenth of a second. */
+    private static void pressAnswersAtOnce() {
+        Gearbox g = run(12f, new Inputs(true, 0f, 0f, false, Shifter.P));
+        float idle = g.rpm;
+        Inputs press = new Inputs(true, 0f, 1f, false, Shifter.P);
+        g.update(0.05f, press);
+        g.update(0.05f, press);
+        check(g.throttle > 0.5f, "throttle after 0.1 s " + g.throttle);
+        check(g.rpm > idle + 60f, "rpm after 0.1 s " + g.rpm + " from " + idle);
     }
 
     /** A floored pull from rest: shifts are blended, never a jump. */

@@ -1,40 +1,41 @@
 package com.nemesis.enginesound.synth;
 
 /**
- * Four recorded loops from one car: throttle low and high, overrun low and
- * high. Pedal crossfades throttle against overrun. RPM crossfades the low
- * recording against the high one. Each loop is pitch-shifted from the RPM
- * it was recorded at. A short limiter loop is added while the gearbox is
- * on the rev limiter.
+ * Recorded loops from one car: throttle ("on") and overrun ("off") sets,
+ * each ordered by RPM. Pedal crossfades throttle against overrun. RPM
+ * crossfades neighbouring loops of a set at its band points. Each loop is
+ * pitch-shifted from the RPM it was recorded at. A short limiter loop is
+ * added while the gearbox is on the rev limiter.
  */
 public final class ThrottleVoice implements EngineVoice {
     public static final String BAC = "bac";
     public static final String FERRARI = "ferrari";
     public static final String PROCAR = "procar";
+    public static final String GT = "gt";
 
     private final String id;
     private final String label;
-    private final SampleVoice.Loop onLow;
-    private final SampleVoice.Loop onHigh;
-    private final SampleVoice.Loop offLow;
-    private final SampleVoice.Loop offHigh;
+    private final SampleVoice.Loop[] on;
+    private final float[] onBand;
+    private final SampleVoice.Loop[] off;
+    private final float[] offBand;
     private final SampleVoice.Loop limiter;
-    private final float bandLow;
-    private final float bandHigh;
+    private final float[] onGain;
+    private final float[] offGain;
 
+    /** Each loop set pairs with an equally long, ascending band of RPM points. */
     public ThrottleVoice(String id, String label,
-            SampleVoice.Loop onLow, SampleVoice.Loop onHigh,
-            SampleVoice.Loop offLow, SampleVoice.Loop offHigh,
-            SampleVoice.Loop limiter, float bandLow, float bandHigh) {
+            SampleVoice.Loop[] on, float[] onBand,
+            SampleVoice.Loop[] off, float[] offBand, SampleVoice.Loop limiter) {
         this.id = id;
         this.label = label;
-        this.onLow = onLow;
-        this.onHigh = onHigh;
-        this.offLow = offLow;
-        this.offHigh = offHigh;
+        this.on = on;
+        this.onBand = onBand;
+        this.off = off;
+        this.offBand = offBand;
         this.limiter = limiter;
-        this.bandLow = bandLow;
-        this.bandHigh = bandHigh;
+        this.onGain = new float[on.length];
+        this.offGain = new float[off.length];
     }
 
     public String id() {
@@ -55,21 +56,31 @@ public final class ThrottleVoice implements EngineVoice {
         if (dst.length < n) n = dst.length - (dst.length & 1);
         for (int i = 0; i < n; i++) dst[i] = 0;
 
-        float span = bandHigh - bandLow;
-        float u = span > 1f ? (rpm - bandLow) / span : 0f;
-        if (u < 0f) u = 0f;
-        else if (u > 1f) u = 1f;
-        float low = (float) Math.cos(u * Math.PI * 0.5);
-        float high = (float) Math.sin(u * Math.PI * 0.5);
-        float on = (float) Math.sin(pedal * Math.PI * 0.5);
-        float off = (float) Math.cos(pedal * Math.PI * 0.5);
-
-        mix(dst, frames, onLow, rpm, volume * on * low);
-        mix(dst, frames, onHigh, rpm, volume * on * high);
-        mix(dst, frames, offLow, rpm, volume * off * low);
-        mix(dst, frames, offHigh, rpm, volume * off * high);
+        float onAmt = (float) Math.sin(pedal * Math.PI * 0.5);
+        float offAmt = (float) Math.cos(pedal * Math.PI * 0.5);
+        spread(rpm, onBand, onGain);
+        spread(rpm, offBand, offGain);
+        for (int i = 0; i < on.length; i++) mix(dst, frames, on[i], rpm, volume * onAmt * onGain[i]);
+        for (int i = 0; i < off.length; i++) mix(dst, frames, off[i], rpm, volume * offAmt * offGain[i]);
         if (limit && limiter != null) {
             mix(dst, frames, limiter, rpm, volume);
+        }
+    }
+
+    /** Equal-power crossfade between the two band points around rpm; the ends hold. */
+    private static void spread(float rpm, float[] band, float[] gain) {
+        int last = band.length - 1;
+        for (int i = 0; i <= last; i++) gain[i] = 0f;
+        int k = 0;
+        while (k < last && rpm >= band[k + 1]) k++;
+        float span = k < last ? band[k + 1] - band[k] : 0f;
+        float u = span > 1f ? (rpm - band[k]) / span : 0f;
+        if (u < 0f) u = 0f;
+        if (k < last && span > 1f) {
+            gain[k] = (float) Math.cos(u * Math.PI * 0.5);
+            gain[k + 1] = (float) Math.sin(u * Math.PI * 0.5);
+        } else {
+            gain[k] = 1f;
         }
     }
 

@@ -26,7 +26,7 @@ public final class Prefs {
     }
 
     public String profile() {
-        return sp.getString(PROFILE, SampleVoice.G37);
+        return sp.getString(PROFILE, SampleVoice.V8);
     }
 
     public void setProfile(String id) {

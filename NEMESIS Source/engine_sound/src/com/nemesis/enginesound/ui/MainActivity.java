@@ -21,23 +21,20 @@ import com.nemesis.enginesound.model.Shifter;
 import com.nemesis.enginesound.service.EngineSoundService;
 import com.nemesis.enginesound.synth.SampleVoice;
 import com.nemesis.enginesound.synth.ThrottleVoice;
-import com.nemesis.enginesound.synth.V6Synth;
 import com.nemesis.enginesound.vehicle.VehicleSnapshot;
 
 public final class MainActivity extends Activity {
     private static final String[] IDS = {
-            SampleVoice.G37, ThrottleVoice.BAC, ThrottleVoice.FERRARI, ThrottleVoice.PROCAR,
-            SampleVoice.HONDA, SampleVoice.C43, V6Synth.ID_VR35, V6Synth.ID_VQ35
+            SampleVoice.V8, ThrottleVoice.BAC, ThrottleVoice.FERRARI, ThrottleVoice.PROCAR, ThrottleVoice.GT,
+            SampleVoice.HONDA
     };
     private static final String[] LABELS = {
-            "Infiniti G37",
+            "V8",
             "BAC Mono",
             "Ferrari 458",
             "BMW M1 Procar",
-            "Honda 3.2 V6",
-            "Mercedes C43 V6",
-            "VR35 twin-turbo (generated)",
-            "VQ35 V6 (generated)"
+            "GT FUSION V8",
+            "Honda 3.2 V6"
     };
 
     private EngineSoundService svc;

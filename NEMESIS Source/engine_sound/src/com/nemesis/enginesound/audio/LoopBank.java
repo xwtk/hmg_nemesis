@@ -15,11 +15,11 @@ import java.io.InputStream;
 public final class LoopBank {
     private static final String TAG = "EngineSound.audio";
     private static SampleVoice honda;
-    private static SampleVoice c43;
-    private static SampleVoice g37;
+    private static SampleVoice v8;
     private static ThrottleVoice bac;
     private static ThrottleVoice ferrari;
     private static ThrottleVoice procar;
+    private static ThrottleVoice gt;
 
     private LoopBank() {}
 
@@ -31,19 +31,12 @@ public final class LoopBank {
             }
             return honda;
         }
-        if (SampleVoice.C43.equals(id)) {
-            if (c43 == null) {
-                c43 = load(ctx, SampleVoice.C43, "Mercedes C43 V6",
-                        new int[] {1760, 5280});
+        if (SampleVoice.V8.equals(id)) {
+            if (v8 == null) {
+                v8 = load(ctx, SampleVoice.V8, "V8",
+                        new int[] {2000, 2250, 2600, 2950, 3300, 3650, 4000, 4300});
             }
-            return c43;
-        }
-        if (SampleVoice.G37.equals(id)) {
-            if (g37 == null) {
-                g37 = load(ctx, SampleVoice.G37, "Infiniti G37",
-                        new int[] {1500, 2000, 3000, 3300, 3800, 4400, 4800, 5700, 6300, 6900, 7300});
-            }
-            return g37;
+            return v8;
         }
         if (ThrottleVoice.BAC.equals(id)) {
             if (bac == null) {
@@ -66,6 +59,14 @@ public final class LoopBank {
             }
             return procar;
         }
+        if (ThrottleVoice.GT.equals(id)) {
+            if (gt == null) {
+                gt = loadThrottle(ctx, ThrottleVoice.GT, "GT FUSION V8", "gt",
+                        new int[] {1900, 4100, 7200}, new int[] {1900, 4100, 7200},
+                        new int[] {880, 2100, 4800, 7200}, new int[] {880, 2100, 4800, 7200}, 8100);
+            }
+            return gt;
+        }
         return null;
     }
 
@@ -84,20 +85,41 @@ public final class LoopBank {
         return new SampleVoice(id, label, loops);
     }
 
-    /** on low, on high, off low, off high, limiter. Band is the on-loop pair. */
+    /** on low, on high, off low, off high, limiter. Both sets crossfade on the on-loop pair. */
     private static ThrottleVoice loadThrottle(Context ctx, String id, String label, String prefix,
             int onLow, int onHigh, int offLow, int offHigh, int limitRpm) {
-        SampleVoice.Loop onL = loop(ctx, prefix + "_on_" + onLow + ".pcm", onLow);
-        SampleVoice.Loop onH = loop(ctx, prefix + "_on_" + onHigh + ".pcm", onHigh);
-        SampleVoice.Loop offL = loop(ctx, prefix + "_off_" + offLow + ".pcm", offLow);
-        SampleVoice.Loop offH = loop(ctx, prefix + "_off_" + offHigh + ".pcm", offHigh);
-        SampleVoice.Loop lim = loop(ctx, prefix + "_lim_" + limitRpm + ".pcm", limitRpm);
-        if (onL == null || onH == null || offL == null || offH == null) {
+        int[] band = {onLow, onHigh};
+        return loadThrottle(ctx, id, label, prefix,
+                new int[] {onLow, onHigh}, band, new int[] {offLow, offHigh}, band, limitRpm);
+    }
+
+    /** Loops are prefix_on_RPM, prefix_off_RPM and prefix_lim_RPM; a band is the RPM points a set crossfades on. */
+    private static ThrottleVoice loadThrottle(Context ctx, String id, String label, String prefix,
+            int[] on, int[] onBand, int[] off, int[] offBand, int limitRpm) {
+        SampleVoice.Loop[] onL = loops(ctx, prefix + "_on_", on);
+        SampleVoice.Loop[] offL = loops(ctx, prefix + "_off_", off);
+        if (onL == null || offL == null) {
             Log.w(TAG, "missing throttle loops " + prefix);
             return null;
         }
+        SampleVoice.Loop lim = loop(ctx, prefix + "_lim_" + limitRpm + ".pcm", limitRpm);
         Log.i(TAG, "loaded " + label);
-        return new ThrottleVoice(id, label, onL, onH, offL, offH, lim, onLow, onHigh);
+        return new ThrottleVoice(id, label, onL, floats(onBand), offL, floats(offBand), lim);
+    }
+
+    private static SampleVoice.Loop[] loops(Context ctx, String stem, int[] rpm) {
+        SampleVoice.Loop[] out = new SampleVoice.Loop[rpm.length];
+        for (int i = 0; i < rpm.length; i++) {
+            out[i] = loop(ctx, stem + rpm[i] + ".pcm", rpm[i]);
+            if (out[i] == null) return null;
+        }
+        return out;
+    }
+
+    private static float[] floats(int[] v) {
+        float[] f = new float[v.length];
+        for (int i = 0; i < v.length; i++) f[i] = v[i];
+        return f;
     }
 
     private static SampleVoice.Loop loop(Context ctx, String name, int rpm) {

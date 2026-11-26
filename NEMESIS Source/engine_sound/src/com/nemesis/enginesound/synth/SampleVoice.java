@@ -3,13 +3,12 @@ package com.nemesis.enginesound.synth;
 /**
  * Plays recorded exhaust loops. The loop whose recorded RPM is nearest the
  * target is resampled to that RPM. Between two loops the two results are
- * crossfaded. Honda layers are 680, 2300 and 3200. C43 layers are 1760
- * and 5280. G37 layers run from 1500 through a 7300 rpm layer.
+ * crossfaded. Honda layers are 680, 2300 and 3200. The V8
+ * layers run from 2000 to 4300, cut from the car's own 4 s sweep.
  */
 public final class SampleVoice implements EngineVoice {
     public static final String HONDA = "honda";
-    public static final String C43 = "c43";
-    public static final String G37 = "g37";
+    public static final String V8 = "v8";
 
     public static final class Loop {
         public final short[] pcm;
