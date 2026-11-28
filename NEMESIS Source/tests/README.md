@@ -9,5 +9,6 @@ Host tests run on a Linux PC with `make test-meta test-hooks`. They need `cc`, `
 | `check_manager_apk.py` | Built Manager APK is well formed |
 | `pkg_live_snapshot.sh` | `adb.toggle` example hooks and `adbctl.sh`, in a private namespace |
 | `pkg_livepatch_check.py` | LivePatch packages: every `[patch]`/`[file]` points at a shipped file, no hook writes `/system`, head-unit scripts call only commands the unit has |
+| `porter_fp_test.sh` | A fingerprint pack (`porter convert`) ports exactly like its smali pack, in batch and serve mode, on every build in the porter corpus (`UNIVERSAL`, skipped when it is missing; needs a JDK and `d8`) |
 
 The emulator tests (the QEMU lab that boots a Gen5W system image and installs NEMESIS in it) are not published, because they depend on a firmware image that cannot be redistributed. `make test-emu` is kept for reference and stops unless `NEMESIS_EMU_DIR` points at such a lab. A host run does not prove a head-unit script: the unit's shell has no `printf`, `awk` or `sed`, so run changed scripts on a real unit or an emulator before relying on them.

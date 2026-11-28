@@ -118,4 +118,19 @@ unit "$T/wrapped"; touch "$T/r/system/bin/hmgapid"
 check "hmgapid with no installed.txt (version unknown): refused" "$NEMESIS_MSG_HMGAPI" "$(verdict)"
 unit "$T/lp" "$T/wrapped"; touch "$T/r/system/bin/hmgapid"
 check "hmgapid, version unknown, under NEMESIS 1.17: the 1.17 message" "$NEMESIS_MSG_HMGAPI_LP" "$(verdict)"
+
+# ---- native/stock.c: lp_wrapper_install trusts app_process(.real) by the same rules
+if cc -Wall -Wextra -Werror -DSTOCK_MAIN -o "$T/stock_check" "$HERE/native/stock.c"; then
+    : > "$T/empty"
+    head -c 8192 "$T/stock" > "$T/cut8k"   # every byte the loader maps, no section headers
+    for f in stock lp script wrapped cut empty cut8k; do
+        s=$(compat_stock_app_process "$T/$f" && echo ok || echo refused)
+        check "stock.c agrees with compat.sh: $f ($s)" "$s" "$("$T/stock_check" "$T/$f")"
+    done
+    check "stock.c: the stock binary" ok "$("$T/stock_check" "$T/stock")"
+    check "stock.c: an empty .real" refused "$("$T/stock_check" "$T/empty")"
+    check "stock.c: NEMESIS's own script" refused "$("$T/stock_check" "$T/lp")"
+else
+    echo "FAIL  native/stock.c does not build on the host"; fail=1
+fi
 exit $fail

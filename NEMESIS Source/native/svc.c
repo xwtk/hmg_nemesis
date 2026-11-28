@@ -386,6 +386,7 @@ static void android_up_tick(void) {
         seen[strcspn(seen, "\n")] = 0;
     }
     if (id[0] && !strcmp(id, seen)) return;
+    host_state_android_up();
     f = fopen(ANDROID_UP_MARK, "w");
     if (f) {
         fprintf(f, "%s\n", id);

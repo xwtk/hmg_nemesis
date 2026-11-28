@@ -28,7 +28,7 @@ Same `id` already installed → **update** (Yes/No in Manager when Android is up
 
 | Key | Required | Meaning |
 |-----|----------|---------|
-| `version` | recommended | Descriptor format: `1.2`, `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. A newer version than this release reads (for example `1.3`) makes the package incompatible: the Store says to update NEMESIS, and install refuses it even with the risk accepted. NEMESIS update packages are exempt. |
+| `version` | recommended | Descriptor format: `1.3`, `1.2`, `1.1` or `1.0`. Missing means `1.0`. Dotted numbers only. `1.3` is needed for a LivePatch fingerprint pack (see 09-LivePatch.md §3.5). A newer version than this release reads (for example `1.4`) makes the package incompatible: the Store says to update NEMESIS, and install refuses it even with the risk accepted. NEMESIS update packages are exempt. |
 | `favicon` | no | `1.2`: an image inside the package (PNG or JPEG, up to 256 KiB), shown in the Store, My Packages and Package Manager. It must be a relative path with no `..`. Missing, too large, or not an image shows the generic app icon. |
 | `id` | yes | Install id. Max 64 characters: letters, digits, `.`, `_`, `-`. No leading `.` or `-`, no `..`. |
 | `name` | recommended | Display name (defaults to `id`) |
@@ -275,6 +275,9 @@ Locked packages print `package is locked` and stay. Wipe NEMESIS removes everyth
 5. Refuse unmet dependencies (exit 22) and packages excluded with `!` (exit 23).
 6. Refuse an `incompatible` package unless `--accept-risk` is passed (exit 20).
 7. Extract to `/data/local/tmp/nemesis/stage/<id>` (zip-slip `..` members are not applied).
-8. `preinstall` → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → register services → write `packages.db` → `postinstall` → start services.
+8. `preinstall` → LivePatch space check and porting (exit 25 / 26) → copy tree to `/data/nemesis/apps/<id>/` → `pm install` APKs → LivePatch commit → register services → write `packages.db` → `postinstall` → start services. A `preinstall` that refuses therefore shows its own message before LivePatch reads any target.
+9. An update first removes the old version (its `preuninstall`, `pm uninstall`, `postuninstall`), then runs step 8. Its LivePatch entries keep their place in each chain. If the new version then fails, the old version's patches are taken off too, so nothing stays mounted for a package that is gone.
+
+Uninstall runs `preuninstall` → LivePatch re-ports the other packages' chains → `pm uninstall` → `postuninstall` → files removed.
 
 Logs: `nemesis log dump` and `/data/nemesis/nemesis.log`.

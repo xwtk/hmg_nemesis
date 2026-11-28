@@ -140,7 +140,7 @@ A factory **system image** flash also removes `/system/xbin/nemesis` and the APK
 An update replaces the core files without a DSP OTA. It comes from a stick (`type=update`), from **Settings → Check for updates**, or from a shell:
 
 ```sh
-/system/xbin/nemesis update /storage/usb0/nemesis-update-1.17.1.zip
+/system/xbin/nemesis update /storage/usb0/nemesis-update-1.17.2.zip
 ```
 
 Each GitHub Release attaches a ready update bundle (`nemesis-update-<version>.zip`) alongside a minimal `NEMESIS.data` — copy both to the root of the drive. The `NEMESIS.data` is only:
@@ -155,7 +155,7 @@ path=nemesis-1.16.7.zip
 Build the zip on the PC from the `NEMESIS Source/` folder:
 
 ```bash
-python3 tools/make_update_zip.py -o nemesis-update-1.17.1.zip --version 1.17.1 --no-qb-hook
+python3 tools/make_update_zip.py -o nemesis-update-1.17.2.zip --version 1.17.2 --no-qb-hook
 ```
 
 `--no-qb-hook` leaves out `core/qb_hook.sh`. An update runs the binary already on the unit, and on real units 1.16 and 1.16.1 fail when they rewrite the hook, so a zip meant for them must not carry it.

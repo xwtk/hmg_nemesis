@@ -86,6 +86,16 @@ OR
 
 ## **Changelog**
 
+### 1.17.2
+
+- **Safer `app_process` replacement** ([#117](https://github.com/xwtk/hmg_nemesis/issues/117), [#120](https://github.com/xwtk/hmg_nemesis/issues/120)). LivePatch now writes `app_process.real` all the way to storage before it puts its start-up script in front of it, so losing power right after an install can no longer leave the unit unable to start Android. The script is installed only over a stock `app_process`, `.real` is always copied fresh from it, and nothing is changed when both files are already modified.
+- **USB sticks with Android down.** The head unit only mounts USB sticks when Android asks for it. Now, once Android has been down for about 20 seconds and its system service is not running, NEMESIS mounts the stick itself (FAT32, exFAT or NTFS). If the USB port was left in device mode, which turns off USB power, NEMESIS switches it back to host mode first. Only a stick with `NEMESIS.emergency` is acted on. See [06 - Run Scripts](06-Run-Scripts.md).
+- **The install queue no longer hangs** after a package's hook starts a background program ([#123](https://github.com/xwtk/hmg_nemesis/issues/123)). That program kept the queue's lock open, so the next install waited forever until it was stopped.
+- **Hook order.** `preinstall` now runs before LivePatch ports the package, so a package that refuses to install says so right away instead of after the port. Uninstall runs `preuninstall` before re-porting the other packages, and restarts the package's services if the re-port fails. An update whose new version fails no longer leaves the old version's patches mounted.
+- **Block OTA updates** now also turns off OTAClient's start-up receiver, connection and service, not only its periodic check. A block set by 1.17.1 or earlier is extended once Android is up.
+- **Fingerprint packs (descriptor version 1.3).** A LivePatch dex patch can now ship without any of the stock app's code: a fingerprint of the stock app plus only the edited lines. Such a pack is about a quarter of the size and ports the same as the full pack. Build one with `tools/porter.sh pack --fp`, or convert an existing pack with `tools/porter.sh convert`. A package that carries one must declare `version=1.3`, so older NEMESIS refuses it. See [09 - LivePatch](09-LivePatch.md#35-the-dex-engine).
+- **Safe mode docs.** Inserting a USB stick does not turn LivePatch safe mode on by itself. To recover a unit, the emergency stick's script runs `nemesis livepatch safe on`; see [09 - LivePatch](09-LivePatch.md#4-safe-mode).
+
 ### 1.17.1
 
 - **NEMESIS 1.17 and later refuse to install** over HMG-API older than 1.1.0-rc.10, or, without HMG-API, over a modified `app_process`. The installer, the troubleshooter and the core update show why in a popup and change nothing. On a unit that already has NEMESIS 1.17, the popup also warns not to uninstall that HMG-API before updating it, as that would render the HU inoperable. See [04 - Install and Uninstall](04-Install-and-Uninstall.md#units-nemesis-117-and-later-refuse).

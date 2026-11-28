@@ -16,6 +16,8 @@ import java.util.Set;
  *        porter batch <pack dir> <jobs file> <class path dir>...   device for each "app odex apk dz report" line, one VM
  *        porter selftest
  *        porter pack <universal dir> <out dir> <ref apk dir> <app>...   the pack tree for a package (ref dexes, res ids, patched files)
+ *        porter pack --fp <universal dir> <out dir> <ref apk dir> <app>...   the same as a fingerprint pack (no stock code, metadata 1.3)
+ *        porter convert <pack dir> <out dir> <app>...   a smali pack's apps as a fingerprint pack
  *        porter serve <class path dir>...   LivePatch: one "port\t..." request per stdin line, protocol on stdout
  *        porter device <pack dir> <app> <odex> <apk> <out.dz> <report.json> <class path dir>...
  *               on the unit: port one stock odex; exit 1 (report kept) on conflicts or unresolved refs
@@ -29,8 +31,12 @@ public final class Main {
             System.out.println("selftest ok");
         } else if (a.length == 4 && a[0].equals("regress")) {
             regress(new File(a[1]), a[2], new File(a[3]));
+        } else if (a.length >= 6 && a[0].equals("pack") && a[1].equals("--fp")) {
+            pack(new File(a[2]), new File(a[3]), new File(a[4]), Arrays.asList(a).subList(5, a.length), true);
         } else if (a.length >= 5 && a[0].equals("pack")) {
-            pack(new File(a[1]), new File(a[2]), new File(a[3]), Arrays.asList(a).subList(4, a.length));
+            pack(new File(a[1]), new File(a[2]), new File(a[3]), Arrays.asList(a).subList(4, a.length), false);
+        } else if (a.length >= 4 && a[0].equals("convert")) {
+            Fp.convert(new File(a[1]), new File(a[2]), Arrays.asList(a).subList(3, a.length));
         } else if (a.length >= 2 && a[0].equals("serve")) {
             serve(Arrays.asList(a).subList(1, a.length));
         } else if (a.length >= 8 && a[0].equals("device")) {
@@ -52,6 +58,17 @@ public final class Main {
             if (t.containsKey(e.getKey()))
                 out.put(e.getValue(), t.get(e.getKey()));
         return out;
+    }
+
+    /** ref/<app>.res (name id per line) against the unit's apk: ref id -> unit id */
+    static Map<String, String> refRes(File pk, String app, File apk) throws IOException {
+        Map<String, String> t = Arsc.resIds(apk), res = new LinkedHashMap<String, String>();
+        for (String l : Py.readText(new File(pk, "ref/" + app + ".res")).split("\n")) {
+            int sp = l.indexOf(' ');
+            if (sp > 0 && t.containsKey(l.substring(0, sp)))
+                res.put(l.substring(sp + 1), t.get(l.substring(0, sp)));
+        }
+        return res;
     }
 
     static void regress(File u, String tag, File out) throws Exception {
@@ -83,14 +100,13 @@ public final class Main {
     }
 
     /** stock ref trees as api-17 dexes (only if they disassemble back byte-identical), ref res ids, patched delta */
-    static void pack(File u, File out, File apkDir, List<String> apps) throws IOException {
+    /** fp: fp/ + delta/ (metadata 1.3, no stock code) instead of ref/<app>.zip + patched/ */
+    static void pack(File u, File out, File apkDir, List<String> apps, boolean fp) throws IOException {
         for (String app : apps) {
             Map<String, String> A = readTree(new File(u, "ref/stock/" + app + "_smali"));
             Map<String, String> rt = Dex.disassemble(Dex.assemble(A, 17), 17);
             if (!rt.equals(A))
                 throw new IOException(app + ": ref/stock does not survive smali a/baksmali d -a 17");
-            byte[] zip = zipTree(rt); // the order the unit used to get from baksmali d
-            Py.writeBytes(new File(out, "ref/" + app + ".zip"), zip);
             StringBuilder b = new StringBuilder();
             for (Map.Entry<String, String> e : Arsc.resIds(new File(apkDir, app + ".apk")).entrySet())
                 b.append(e.getKey()).append(' ').append(e.getValue()).append('\n');
@@ -98,11 +114,19 @@ public final class Main {
             Map<String, String> P = readTree(new File(u, "ref/patched/" + app + "_smali")), delta = new LinkedHashMap<String, String>();
             if (!P.keySet().containsAll(A.keySet()))
                 throw new IOException(app + ": patched tree drops stock classes");
+            writeTree(new File(out, "overrides/" + app), readTree(new File(u, "overrides/" + app)));
+            if (fp) {
+                Fp.write(out, app, rt, P);
+                System.out.println(app + " fingerprint " + new File(out, "fp/" + app + ".zip").length() + " bytes, delta "
+                        + new File(out, "delta/" + app + ".delta").length() + " bytes");
+                continue;
+            }
+            byte[] zip = zipTree(rt); // the order the unit used to get from baksmali d
+            Py.writeBytes(new File(out, "ref/" + app + ".zip"), zip);
             for (Map.Entry<String, String> e : P.entrySet())
                 if (!e.getValue().equals(A.get(e.getKey())))
                     delta.put(e.getKey(), e.getValue());
             writeTree(new File(out, "patched/" + app), delta);
-            writeTree(new File(out, "overrides/" + app), readTree(new File(u, "overrides/" + app)));
             System.out.println(app + " ref " + zip.length + " bytes, " + delta.size() + " patched files");
         }
     }
@@ -205,28 +229,26 @@ public final class Main {
         Map<String, String> tgt = Dex.text(deo); // what fetch.py's assemble/disassemble round trip gives, see Dex.target
         ui(app, "matching names", 42);
         long tc = System.currentTimeMillis();
-        Map<String, String> stock = unzipTree(new File(pk, "ref/" + app + ".zip"));
-        Map<String, String> patched = new LinkedHashMap<String, String>(stock);
-        patched.putAll(readTree(new File(pk, "patched/" + app)));
-        Map<String, String> refRes = new LinkedHashMap<String, String>(), t = Arsc.resIds(apk), res = new LinkedHashMap<String, String>();
-        for (String l : Py.readText(new File(pk, "ref/" + app + ".res")).split("\n")) {
-            int sp = l.indexOf(' ');
-            if (sp > 0)
-                refRes.put(l.substring(0, sp), l.substring(sp + 1));
+        boolean fp = Fp.isPack(pk, app);
+        Fp.Delta delta = fp ? Fp.read(new File(pk, "delta/" + app + ".delta")) : null;
+        Map<String, String> stock = unzipTree(new File(pk, (fp ? "fp/" : "ref/") + app + ".zip")), patched = null;
+        if (!fp) {
+            patched = new LinkedHashMap<String, String>(stock);
+            patched.putAll(readTree(new File(pk, "patched/" + app)));
         }
-        for (Map.Entry<String, String> e : refRes.entrySet())
-            if (t.containsKey(e.getKey()))
-                res.put(e.getValue(), t.get(e.getKey()));
+        Map<String, String> res = refRes(pk, app, apk);
         long t1 = System.currentTimeMillis();
-        Map<String, Smali.Cls> A = Smali.fromTexts(stock), P = Smali.fromTexts(patched);
+        Map<String, Smali.Cls> A = Smali.fromTexts(stock), P = fp ? null : Smali.fromTexts(patched);
         Set<String> same = new HashSet<String>();
-        if (System.getenv("PORTER_NOSEED") == null)
+        if (fp)
+            same = Fp.same(pk, app, tgt);
+        else if (System.getenv("PORTER_NOSEED") == null)
             for (Map.Entry<String, String> e : stock.entrySet())
                 if (sameText(e.getValue(), tgt.get(e.getKey())))
                     same.add(e.getKey());
         String firstDiff = null;
         for (Map.Entry<String, String> e : stock.entrySet())
-            if (firstDiff == null && !same.contains(e.getKey())) {
+            if (!fp && firstDiff == null && !same.contains(e.getKey())) {
                 String x = e.getValue(), y = tgt.get(e.getKey());
                 int i = 0;
                 while (y != null && i < x.length() && i < y.length() && x.charAt(i) == y.charAt(i))
@@ -242,7 +264,7 @@ public final class Main {
         // every ref class byte-identical in the target: Learn's answer is the identity (13 builds x 6 apps agree)
         boolean identity = same.size() == A.size();
         if (!identity && (cache == null || !loadNames(cache, cls, mem))) {
-            Learn m = new Learn(A, Smali.fromTexts(tgt));
+            Learn m = new Learn(A, fp ? Fp.learnTree(tgt) : Smali.fromTexts(tgt));
             if (System.getenv("PORTER_SEED") != null) // shortcut: not exact (neev_can_v14 PhoneProjection differs), off until proven
                 m.seed(same);
             m.run();
@@ -254,12 +276,21 @@ public final class Main {
         }
         long tl = System.currentTimeMillis();
         ui(app, "porting", 43);
-        Port.Result r = Port.port(A, P, Smali.fromTexts(tgt), Port.loadOverrides(new File(pk, "overrides/" + app)),
-                new Names(cls, mem, res));
+        Map<String, String> overrides = Port.loadOverrides(new File(pk, "overrides/" + app));
+        Port.Result r = fp ? Fp.port(A, delta, Smali.fromTexts(tgt), overrides, new Names(cls, mem, res))
+                : Port.port(A, P, Smali.fromTexts(tgt), overrides, new Names(cls, mem, res));
         long tq = System.currentTimeMillis();
         ui(app, "checking", 54);
-        List<String> bad = RefCheck.check(A, P, Smali.fromTexts(tgt), new Names(cls, mem, res));
+        List<String> bad = fp ? Fp.refCheck(A, delta, Fp.checkTree(A, delta, Smali.fromTexts(tgt), cls), new Names(cls, mem, res))
+                : RefCheck.check(A, P, Smali.fromTexts(tgt), new Names(cls, mem, res));
         r.report.put("refs_differ", bad);
+        if (System.getenv("PORTER_FILES") != null) { // tests: the ported classes, as text (the dex is not reproducible)
+            Map<String, String> ch = new LinkedHashMap<String, String>();
+            for (Map.Entry<String, String> e : r.files.entrySet())
+                if (!e.getValue().equals(tgt.get(e.getKey())))
+                    ch.put(e.getKey(), e.getValue());
+            writeTree(new File(System.getenv("PORTER_FILES"), app), ch);
+        }
         long t2 = System.currentTimeMillis();
         System.out.println("  parse " + (tp - t1) + " learn " + (tl - tp) + " port " + (tq - tl) + " refcheck " + (t2 - tq));
         boolean ok = r.conflicts.isEmpty() && bad.isEmpty();
@@ -406,23 +437,27 @@ public final class Main {
         }
         long ta = System.currentTimeMillis();
         phase(null, 42, 42.5);
-        Map<String, String> stock = unzipTree(new File(pk, "ref/" + app + ".zip"));
-        Map<String, String> patched = new LinkedHashMap<String, String>(stock);
-        patched.putAll(readTree(new File(pk, "patched/" + app)));
-        Map<String, String> refRes = new LinkedHashMap<String, String>(), t = Arsc.resIds(apk), res = new LinkedHashMap<String, String>();
-        for (String l : Py.readText(new File(pk, "ref/" + app + ".res")).split("\n")) {
-            int sp = l.indexOf(' ');
-            if (sp > 0)
-                refRes.put(l.substring(0, sp), l.substring(sp + 1));
-        }
-        for (Map.Entry<String, String> e : refRes.entrySet())
-            if (t.containsKey(e.getKey()))
-                res.put(e.getValue(), t.get(e.getKey()));
-        Map<String, Smali.Cls> A = Smali.fromTexts(stock), P = Smali.fromTexts(patched);
+        boolean fp = Fp.isPack(pk, app);
+        Map<String, String> stock = unzipTree(new File(pk, (fp ? "fp/" : "ref/") + app + ".zip")), patched, pTexts;
+        Map<String, Smali.Cls> A = Smali.fromTexts(stock);
+        Fp.Delta delta = null;
         int same = 0;
-        for (Map.Entry<String, String> e : stock.entrySet())
-            if (sameText(e.getValue(), S.get(e.getKey())))
-                same++;
+        if (fp) { // the rename checks read the fingerprint plus what the delta adds; anyText also sees the delta's code
+            delta = Fp.read(new File(pk, "delta/" + app + ".delta"));
+            patched = Fp.patchedView(stock, A, delta);
+            pTexts = new LinkedHashMap<String, String>(patched);
+            pTexts.put("\0delta", Py.readText(new File(pk, "delta/" + app + ".delta")));
+            same = Fp.same(pk, app, S).size();
+        } else {
+            patched = new LinkedHashMap<String, String>(stock);
+            patched.putAll(readTree(new File(pk, "patched/" + app)));
+            pTexts = patched;
+            for (Map.Entry<String, String> e : stock.entrySet())
+                if (sameText(e.getValue(), S.get(e.getKey())))
+                    same++;
+        }
+        Map<String, String> res = refRes(pk, app, apk);
+        Map<String, Smali.Cls> P = Smali.fromTexts(patched);
         File cache = cacheFile(app, stock, S);
         stock = null;
         Map<String, String> cls = new LinkedHashMap<String, String>(), mem = new LinkedHashMap<String, String>();
@@ -437,7 +472,7 @@ public final class Main {
         } else {
             how = "learned";
             phase("matching names", 42.5, 42.5); // Learn has no ticks: the bar holds here
-            Learn m = new Learn(A, Smali.fromTexts(S));
+            Learn m = new Learn(A, fp ? Fp.learnTree(S) : Smali.fromTexts(S));
             m.run();
             cls = m.clsMap();
             mem = m.memMap();
@@ -464,7 +499,7 @@ public final class Main {
             m2.putAll(rmem);
             nm = new Names(c2, m2, res);
             phase("porting", 42.5, 53.5);
-            r = Port.port(A, P, Smali.fromTexts(tgt), overrides, nm);
+            r = fp ? Fp.port(A, delta, Smali.fromTexts(tgt), overrides, nm) : Port.port(A, P, Smali.fromTexts(tgt), overrides, nm);
             if (pos < 2)
                 break;
             boolean more = false;
@@ -473,7 +508,7 @@ public final class Main {
                     continue;
                 if (I0 == null)
                     I0 = Smali.fromTexts(tgt);
-                String nn = renameOk(is, P, I0, S, nm, patched, tgt, bdir, apk, pos);
+                String nn = renameOk(is, P, I0, S, nm, pTexts, tgt, bdir, apk, pos);
                 if (nn == null)
                     continue;
                 if (is[0].equals("newcls"))
@@ -488,7 +523,9 @@ public final class Main {
         }
         long tq = System.currentTimeMillis();
         phase("checking", 53.5, 64.5);
-        List<String> bad = RefCheck.check(A, P, chain ? Smali.fromTexts(S) : Smali.fromTexts(tgt), new Names(nm.cls, mem, res));
+        Map<String, Smali.Cls> ct = Smali.fromTexts(chain ? S : tgt);
+        List<String> bad = fp ? Fp.refCheck(A, delta, Fp.checkTree(A, delta, ct, nm.cls), new Names(nm.cls, mem, res))
+                : RefCheck.check(A, P, ct, new Names(nm.cls, mem, res));
         r.report.put("refs_differ", bad);
         r.report.put("renamed", renamed);
         r.report.put("names", how);

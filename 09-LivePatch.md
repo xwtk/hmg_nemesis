@@ -170,6 +170,30 @@ tools/porter.sh pack <src> <out pack dir> <apk dir> <app>...
 
 The packer keeps only the changed classes. On the unit, LivePatch matches the package's names to the build it finds, rewrites resource ids, and builds the odex with `dexopt`.
 
+#### Fingerprint packs (metadata 1.3)
+
+A smali pack ships the whole stock app in `ref/<app>.zip`. A fingerprint pack ships none of the stock code. It is about a quarter of the size, and it ports exactly like the smali pack it was made from:
+
+```text
+<pack>/
+  fp/<app>.zip             each stock class as a fingerprint: class and member names, a hash of each body, the names each body uses
+  fp/<app>.ids             one hash per stock class, to recognise the build the patch was written against
+  delta/<app>.delta        the edits: for each changed method the changed lines with hashes of the stock lines around them, plus added methods, fields and classes in full
+  ref/<app>.res            as above
+  overrides/<app>/*.smali  as above
+```
+
+Build one from the same inputs with `--fp`, or convert a smali pack you already have:
+
+```sh
+tools/porter.sh pack --fp <src> <out pack dir> <apk dir> <app>...
+tools/porter.sh convert <smali pack dir> <out pack dir> <app>...
+```
+
+A package that carries a fingerprint pack must declare `version=1.3`. NEMESIS older than 1.3 refuses the package rather than failing during the port, and `make_nemesis_package.py` will not build it with a lower version. Both kinds of pack can be used on the same unit, and a package may mix them, one kind per app.
+
+The edited methods are still shipped as smali, so anything the patch itself adds or changes can be read from the pack. A method only gets the edit when its body in that build has the same shape as stock, which is the same rule smali packs use. Other bodies need an override, as before.
+
 ### 3.6 Example
 
 ```ini
@@ -240,6 +264,14 @@ The next boot runs fully stock (nothing mounted, no props set) when any of these
 
 - `nemesis livepatch safe on` was run.
 - Android failed to finish booting more than twice in a row, or zygote restarted more than three times in one boot.
-- A USB stick with `NEMESIS.emergency` was inserted. That creates the safe flag, so the following boot is stock.
+Inserting a USB stick does not turn safe mode on by itself. To recover a unit whose Android does not come up, put a script on an emergency stick (one with `NEMESIS.emergency` at its root, see 06-Run-Scripts.md) that runs:
+
+```sh
+/system/xbin/nemesis livepatch safe on
+```
+
+The flag is read at every zygote start, so if Android is restarting in a loop, the next start is already stock without a reboot. Otherwise the next boot is stock.
 
 The installed packages stay installed. Fix or uninstall the package at fault, then run `nemesis livepatch safe off`.
+
+Safe mode works through the wrapper, so it can't help if the wrapper's copy of the stock binary, `/system/bin/app_process.real`, is lost. From 1.17.2, NEMESIS writes that copy to storage before the wrapper replaces `app_process`, so a reset or power loss right after the first install can't leave it empty. Whenever the watchdog finds a stock `app_process`, it copies `.real` fresh from it and never reuses an old one. If neither `app_process` nor an existing `.real` is the stock binary, the wrapper is not installed. The stock check is the same one the installer uses.

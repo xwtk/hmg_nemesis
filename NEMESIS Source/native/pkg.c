@@ -648,12 +648,6 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
     snprintf(root, sizeof(root), "%s/%s", NEMESIS_APPS, id);
     snprintf(meta, sizeof(meta), "%s/NEMESIS.data", root);
     if (is_file(meta) && ini_load(&ini, meta) == 0) have_ini = 1;
-    /* LivePatch first: the rest of each chain is re-ported while the old output stays mounted. */
-    if (lp_prepare(id, NULL, NULL, NULL, NULL) != 0 || lp_commit(id) != 0) {
-        fprintf(stderr, "uninstall failed: %s: LivePatch could not re-port the other packages\n", id);
-        if (have_ini) ini_free(&ini);
-        return 5;
-    }
     stop_pkg_services(id);
     if (have_ini) {
         rc = run_named_hook(&ini, root, "preuninstall");
@@ -662,15 +656,23 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
             fprintf(stderr, "uninstall failed: %s: preuninstall exited %d\n", id, rc);
             ini_free(&ini);
             start_pkg_services(id);
-            lp_swap_flush(); /* shortcut: its patches are already off; a retried uninstall finds nothing to port */
             return 5;
         }
+    }
+    /* The rest of each chain is re-ported while the old output stays mounted. */
+    if (lp_prepare(id, NULL, NULL, NULL, NULL) != 0 || lp_commit(id) != 0) {
+        fprintf(stderr, "uninstall failed: %s: LivePatch could not re-port the other packages\n", id);
+        if (have_ini) ini_free(&ini);
+        start_pkg_services(id);
+        return 5;
+    }
+    if (have_ini) {
         if (pm_uninstall_apks(&ini, root) && !force) {
             log_msg("uninstall %s: apps still installed", id);
             fprintf(stderr, "uninstall failed: %s: Android app still installed\n", id);
             ini_free(&ini);
             start_pkg_services(id);
-            lp_swap_flush();
+            lp_swap_flush(); /* shortcut: its patches are already off; a retried uninstall finds nothing to port */
             return 5;
         }
     }
@@ -695,8 +697,9 @@ static int uninstall_tree(const char *id, int allow_locked, int force) {
     return 0;
 }
 
-static int do_fresh_install(const char *stage, ini_file *ini,
-                            const char *id, const char *name, const char *types, int locked) {
+/* preinstall, then LivePatch (ported into livepatch/work/<id>), files, commit, postinstall. */
+static int do_fresh_install(const char *stage, ini_file *ini, const char *id, const char *name,
+                            const char *version, const char *types, int locked) {
     char dest[MAX_PATH];
     pkg_rec rec;
     int rc;
@@ -706,6 +709,8 @@ static int do_fresh_install(const char *stage, ini_file *ini,
         log_msg("preinstall failed rc=%d", rc);
         return rc;
     }
+    if (lp_check(ini, id) != 0) return 25;
+    if (lp_prepare(id, ini, name, version, stage) != 0) return 26;
     rm_rf(dest);
     mkdir_p(dest, 0755);
     if (copy_tree(stage, dest) != 0) {
@@ -875,10 +880,6 @@ int cmd_install(int argc, char **argv) {
     }
     if (compat != COMPAT_FULL)
         log_msg("install %s: compat=%s%s", id, compat_name(compat), accept_risk ? " (risk accepted)" : "");
-    if (lp_check(&ini, id) != 0) {
-        ini_free(&ini);
-        return 25;
-    }
     snprintf(stage, sizeof(stage), "%s/stage/%s", NEMESIS_TMP, id);
     snprintf(stage_top, sizeof(stage_top), "%s", stage);
     rm_rf(stage);
@@ -899,12 +900,6 @@ int cmd_install(int argc, char **argv) {
         }
         if (strcmp(pkgroot, stage))
             snprintf(stage, sizeof(stage), "%s", pkgroot);
-    }
-    /* Ports into livepatch/work/<id> before any hook; a conflict stops the install here. */
-    if (lp_prepare(id, &ini, meta.name, meta.pkg_ver, stage) != 0) {
-        ini_free(&ini);
-        rm_rf(stage_top);
-        return 26;
     }
     if (have_existing && update) {
         char oldroot[MAX_PATH], oldmeta[MAX_PATH];
@@ -935,14 +930,21 @@ int cmd_install(int argc, char **argv) {
         rm_rf(oldroot);
         log_msg("update replacing %s", id);
     }
-    i = do_fresh_install(stage, &ini, id, meta.name, meta.types, core);
+    i = do_fresh_install(stage, &ini, id, meta.name, meta.pkg_ver, meta.types, core);
     ini_free(&ini);
     rm_rf(stage_top);
-    /* The old version is gone: do not keep listing a package with no files. */
+    /* The old version is gone: do not keep listing a package with no files, nor keep its
+     * patches mounted. The new version's ports go to the cache first. */
     if (i != 0 && have_existing) {
         char left[MAX_PATH];
         snprintf(left, sizeof(left), "%s/%s/NEMESIS.data", NEMESIS_APPS, id);
-        if (!is_file(left)) pkg_remove(id);
+        if (!is_file(left)) {
+            lp_discard(id);
+            if (lp_prepare(id, NULL, NULL, NULL, NULL) != 0 || lp_commit(id) != 0)
+                fprintf(stderr, "LivePatch could not take off the old version's patches\n");
+            pkg_remove(id);
+            lp_finish_remove(id);
+        }
     }
     if (i == 0) fprintf(stdout, "ok %s %s\n", have_existing ? "updated" : "installed", id);
     return i;

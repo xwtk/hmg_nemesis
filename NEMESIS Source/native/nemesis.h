@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NEMESIS_VERSION "1.17.1"
+#define NEMESIS_VERSION "1.17.2"
 #define NEMESIS_ROOT "/data/nemesis"
 #define NEMESIS_APPS "/data/nemesis/apps"
 #define NEMESIS_TMP "/data/local/tmp/nemesis"
@@ -71,7 +71,7 @@
 #define META_SHORT_MAX 64
 #define META_DETAIL_MAX 256
 #define META_LIST_MAX 1024
-#define META_VERSION "1.2"
+#define META_VERSION "1.3"
 /* Package versions known to break this NEMESIS, in depends= form (id@spec, comma-separated).
  * hmgapi 1.0.99.9 is HMG-API 1.1.0-rc.9. */
 #define NEMESIS_BLACKLIST "hmgapi@<=1.0.99.9"
@@ -233,6 +233,7 @@ int cmd_livepatch(int argc, char **argv);
 int cmd_boot_apply(void);
 void lp_boot_ok(void);
 int lp_wrapper_install(void);
+int stock_app_process(const char *path);
 int lp_wrapper_remove(void);
 int lp_check(const ini_file *ini, const char *id);
 int lp_prepare(const char *id, const ini_file *ini, const char *name, const char *version, const char *stage);
@@ -278,6 +279,7 @@ int cmd_selinux(int argc, char **argv);
 int cmd_adb(int argc, char **argv);
 void host_state_restore(void);
 void host_state_boot_apply(void);
+void host_state_android_up(void);
 
 int become_root(void);
 int su_listen(int fds[2]);

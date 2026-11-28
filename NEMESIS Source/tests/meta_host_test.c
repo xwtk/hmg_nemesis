@@ -251,12 +251,12 @@ static void test_compat(void) {
     char r[512];
     const char *os = "ECOKMC.USA.0000.V015.012.260507";
     CHECK(compat_of("[nemesis]\nid=a\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL, "1.0 no fields = full");
-    CHECK(compat_of("[nemesis]\nversion=1.3\nid=a\nname=Fancy Tool\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE &&
+    CHECK(compat_of("[nemesis]\nversion=1.4\nid=a\nname=Fancy Tool\n", os, "cvev_us", r, sizeof(r)) == COMPAT_NONE &&
           strstr(r, "Package \"Fancy Tool\" requires newer version of NEMESIS."),
           "newer metadata = incompatible, by display name '%s'", r);
     CHECK(compat_of("[nemesis]\nversion=" META_VERSION "\nid=a\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
           "current metadata = full");
-    CHECK(compat_of("[nemesis]\nversion=1.3\nid=nemesis.core\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
+    CHECK(compat_of("[nemesis]\nversion=1.4\nid=nemesis.core\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
           "a core update may be newer");
     CHECK(compat_of("[nemesis]\nid=a\nos=ECOKMC.USA.*\nmodels=nq5_us\n", os, "cvev_us", r, sizeof(r)) == COMPAT_FULL,
           "deps+os = full even if model differs");

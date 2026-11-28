@@ -165,7 +165,8 @@ static void shim_unbind(void) {
 
 static void tunnel_enter(const char *tag) {
     mkdir_p(QUEUE_DIR, 0755);
-    tunnel_fd = open(JOB_LOCK, O_CREAT | O_RDWR, 0644);
+    /* CLOEXEC: a daemon a hook starts must not inherit job.lock and hang every later job (#123). */
+    tunnel_fd = open(JOB_LOCK, O_CREAT | O_RDWR | O_CLOEXEC, 0644);
     if (tunnel_fd >= 0) {
         while (flock(tunnel_fd, LOCK_EX) != 0 && errno == EINTR) {
         }

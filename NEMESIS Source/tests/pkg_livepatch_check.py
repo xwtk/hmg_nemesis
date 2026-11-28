@@ -62,10 +62,13 @@ def check(name):
             elif k == "tool" and not os.access(p, os.X_OK):
                 bad.append(f"[{s}] tool {sec.get(k)} is not executable")
         pack = os.path.join(d, sec.get("pack", "files/porter"))
-        for ext in (".zip", ".res"):
-            ref = os.path.join(pack, "ref", sec.get("app", "?") + ext)
+        app = sec.get("app", "?")
+        fp = os.path.isfile(os.path.join(pack, "fp", app + ".zip"))  # fingerprint pack (metadata 1.3)
+        for rel in (["fp/.zip", "fp/.ids", "delta/.delta", "ref/.res"] if fp else ["ref/.zip", "ref/.res"]):
+            sub, ext = rel.split("/.")
+            ref = os.path.join(pack, sub, app + "." + ext)
             if eng == "dex" and not os.path.isfile(ref) and not private(ref):
-                bad.append(f"[{s}] pack has no ref/{sec.get('app')}{ext}")
+                bad.append(f"[{s}] pack has no {sub}/{app}.{ext}")
         if "create" in sec or "prebuilt" in sec:
             bad.append(f"[{s}] create=/prebuilt= are gone (new files come from the farm, ports run on the unit)")
     mksh = shutil.which("mksh")

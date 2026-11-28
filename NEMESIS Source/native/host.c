@@ -6,7 +6,12 @@
 #include <ctype.h>
 #include <strings.h>
 
-#define OTA_COMP "com.hkmc.system.app.OTAClient/com.hkmc.system.app.OTAClient.OTAClientAlarmReceiver"
+/* The alarm receiver is only the periodic check: EventReceiver (boot, ACC on, login) starts
+ * OTAConnection, which runs its own server check 45 s after boot. All four keep OTAClient from
+ * starting; USB updates go through DMClient. */
+#define OTA_PKG "com.hkmc.system.app.OTAClient/com.hkmc.system.app.OTAClient."
+static const char *const ota_comps[] = {"OTAClientAlarmReceiver", "mof.EventReceiver", "OTAConnection",
+                                        "mof.TAppService"};
 #define OTA_FLAG NEMESIS_ROOT "/ota_blocked"
 #define SE_FLAG NEMESIS_ROOT "/selinux_prev"
 #define ADB_USB_FLAG NEMESIS_ROOT "/adb_usb_prev"
@@ -90,11 +95,16 @@ static int ota_wipe_downloads(void) {
     return 0;
 }
 
+/* Every component is tried; non-zero if any pm call failed. */
 static int ota_set_component(int enable) {
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "/system/bin/pm %s %s",
-             enable ? "enable" : "disable", OTA_COMP);
-    return run_cmd(cmd);
+    size_t i;
+    int rc = 0;
+    for (i = 0; i < sizeof(ota_comps) / sizeof(ota_comps[0]); i++) {
+        snprintf(cmd, sizeof(cmd), "/system/bin/pm %s %s%s", enable ? "enable" : "disable", OTA_PKG, ota_comps[i]);
+        if (run_cmd(cmd) != 0) rc = 1;
+    }
+    return rc;
 }
 
 static int ota_block_is_on(void) {
@@ -114,14 +124,14 @@ int cmd_ota_block(int argc, char **argv) {
         }
         ota_wipe_downloads();
         write_file(OTA_FLAG, "1\n", 0644);
-        log_msg("ota-block on: disabled %s", OTA_COMP);
+        log_msg("ota-block on: disabled OTAClient check, alarm, connection and TAppService");
         printf("ok\n");
         return 0;
     }
     if (!strcmp(sub, "off")) {
         ota_set_component(1);
         unlink(OTA_FLAG);
-        log_msg("ota-block off: enabled %s", OTA_COMP);
+        log_msg("ota-block off: enabled OTAClient components");
         printf("ok\n");
         return 0;
     }
@@ -356,6 +366,14 @@ void host_state_restore(void) {
     ota_restore();
     selinux_restore();
     adb_restore();
+}
+
+/* Once per boot with Android up (pm needs it): a block set by NEMESIS 1.17.1 or earlier covered
+ * only the alarm receiver. Forked so the watchdog loop does not wait on four pm runs. */
+void host_state_android_up(void) {
+    if (!ota_block_is_on() || fork() != 0) return;
+    alarm(60);
+    _exit(ota_set_component(0));
 }
 
 /* Re-applies toggles the kernel resets each boot. Called from the watchdog so

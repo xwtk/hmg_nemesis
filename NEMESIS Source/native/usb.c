@@ -1,9 +1,13 @@
 #include "nemesis.h"
 
+#include <dirent.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/system_properties.h>
 #include <sys/wait.h>
+#include <time.h>
 
 static int looks_like_sys_remount(const char *cmd, int *rw_out) {
     size_t n;
@@ -580,11 +584,116 @@ int cmd_usb_info(int list) {
     return 0;
 }
 
+/* ---- Android down: NEMESIS mounts the stick itself ----
+ * vold mounts usb0 only when system_server asks, so with the zygote dead an emergency stick was never
+ * mounted. Once Android has been down SELF_MOUNT_SEC and system_server is gone, the handler puts the
+ * port back in host mode and mounts the stick at USB0 as vold would; a stick without
+ * NEMESIS.emergency is unmounted at once.
+ * shortcut: if Android comes up while NEMESIS holds the stick, vold may fsck and mount over it;
+ * emergency sticks end in a reboot, revisit if one is meant to run while Android boots. */
+/* HU 260507 healthy boot: handler at 2.8 s, system_server at 6.2 s; the odexed bootclasspath means
+ * zygote never compiles first, so system_server is up within seconds or not at all. ~6x margin. */
+#define SELF_MOUNT_SEC 20
+
+static char self_dev[64]; /* block device NEMESIS mounted at USB0, "" = none */
+static char tried_dev[64]; /* already probed this insertion */
+
+/* /dev/block/sdX1, or sdX for a stick with no partition table. Internal storage is mmcblk, the
+ * CD drive tcr0, so sd* is the USB port. */
+static int usb_block_dev(char *out, size_t cap) {
+    DIR *d = opendir("/sys/block");
+    struct dirent *de;
+    int rc = -1;
+    if (!d) return -1;
+    while (rc && (de = readdir(d))) {
+        char part[MAX_PATH];
+        if (strncmp(de->d_name, "sd", 2)) continue;
+        snprintf(part, sizeof(part), "/sys/block/%s/%s1", de->d_name, de->d_name);
+        snprintf(out, cap, "/dev/block/%s%s", de->d_name, is_dir(part) ? "1" : "");
+        rc = 0;
+    }
+    closedir(d);
+    return rc;
+}
+
+/* A device-mode USB config persisted in /data turns VBUS off until Android's USB service switches
+ * back to host, so a dead zygote leaves the stick unpowered. host,adb is default.prop's setting.
+ * A PC attached in device mode (USB adb) keeps the port. */
+static void usb_host_mode(void) {
+    static int done;
+    char mode[PROP_VALUE_MAX] = "", state[32] = "";
+    if (done) return;
+    done = 1;
+    __system_property_get("sys.usb.mode", mode);
+    if (!strcmp(mode, "usb_host")) return;
+    read_file("/sys/class/android_usb/android0/state", state, sizeof(state));
+    if (!strncmp(state, "CONFIGURED", 10)) return;
+    log_msg("usb: android down, port in %s mode; switching to host", mode[0] ? mode : "unknown");
+    __system_property_set("sys.usb.config", "host,adb");
+}
+
+static void usb_self_mount(void) {
+    static const char *const fs[] = {"vfat", "texfat", "tntfs"}; /* what the HU's vold mounts */
+    char dev[64];
+    int i;
+    if (usb_block_dev(dev, sizeof(dev)) != 0) {
+        tried_dev[0] = 0;
+        usb_host_mode();
+        return;
+    }
+    if (!strcmp(dev, tried_dev) || !path_exists(dev)) return; /* ueventd may not have made the node yet */
+    snprintf(tried_dev, sizeof(tried_dev), "%s", dev);
+    mkdir_p(USB0, 0755);
+    for (i = 0; i < 3; i++)
+        if (mount(dev, USB0, fs[i], MS_NOSUID | MS_NODEV | MS_NOATIME | MS_SYNCHRONOUS, NULL) == 0) break;
+    if (i == 3) {
+        log_msg("usb: android down, cannot mount %s as vfat, texfat or tntfs (last errno=%d)", dev, errno);
+        return;
+    }
+    if (!usb_emergency(USB0)) {
+        umount(USB0);
+        log_msg("usb: android down, %s has no NEMESIS.emergency; left unmounted", dev);
+        return;
+    }
+    snprintf(self_dev, sizeof(self_dev), "%s", dev);
+    log_msg("usb: android down, mounted %s (%s) at %s", dev, fs[i], USB0);
+}
+
+/* The stick NEMESIS mounted was pulled out. */
+static void usb_self_release(void) {
+    char dev[64];
+    if (!self_dev[0] || (usb_block_dev(dev, sizeof(dev)) == 0 && !strcmp(dev, self_dev))) return;
+    umount2(USB0, MNT_DETACH);
+    log_msg("usb: released %s", self_dev);
+    self_dev[0] = 0;
+}
+
+static long mono_sec(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (long)t.tv_sec;
+}
+
+/* MountService lives in system_server. sys.boot_completed alone is no proof: NEMESIS clears it for
+ * every APK install (pm_install_apk) while Android is up. */
+static int system_server_running(void) {
+    DIR *d = opendir("/proc");
+    struct dirent *de;
+    int found = 0;
+    if (!d) return 1;
+    while (!found && (de = readdir(d)))
+        if (de->d_name[0] >= '1' && de->d_name[0] <= '9')
+            found = proc_cmdline_has((pid_t)atoi(de->d_name), "system_server");
+    closedir(d);
+    return found;
+}
+
 int cmd_usb_handler(void) {
     int handled = 0;
     int wait_type = 0;
     int have_ident = 0;
     int waiting = 0;
+    long down_since = -1; /* when sys.boot_completed last stopped being 1 */
     usb_ident last_id;
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
@@ -594,7 +703,15 @@ int cmd_usb_handler(void) {
     for (;;) {
         char meta[MAX_PATH];
         usb_ident cur;
-        int mounted = usb0_mounted();
+        int mounted;
+        usb_self_release();
+        mounted = usb0_mounted();
+        if (framework_up()) down_since = -1;
+        else if (down_since < 0) down_since = mono_sec();
+        if (!mounted && down_since >= 0 && mono_sec() - down_since >= SELF_MOUNT_SEC && !system_server_running()) {
+            usb_self_mount();
+            mounted = usb0_mounted();
+        }
         chmod(SESSION_DIR, 0777);
         if (!mounted) {
             if (handled) log_msg("usb-handler rearm (unmounted)");

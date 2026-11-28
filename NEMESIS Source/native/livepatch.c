@@ -1133,29 +1133,50 @@ static int is_wrapper(void) {
     return n > 0 && !strncmp(buf, "#!/system/bin/sh\n# NEMESIS LivePatch", 36);
 }
 
-/* Idempotent. The first run keeps the real binary as app_process.real. */
+static int fsync_path(const char *path) {
+    int fd = open(path, O_RDONLY), r;
+    if (fd < 0) return -1;
+    r = fsync(fd);
+    close(fd);
+    return r;
+}
+
+/* Idempotent. The first run keeps the real binary as app_process.real.
+ * .real reaches storage (temp, fsync, rename, fsync dir) before the script replaces app_process:
+ * a reset without sync must never leave the script in front of an empty or short .real (#120). */
 int lp_wrapper_install(void) {
     char tmp[MAX_PATH], cur[sizeof(WRAPPER_TEXT) + 8];
     if (!path_exists(WRAPPER)) return -1;
     if (is_wrapper()) {
         int n = read_file(WRAPPER, cur, sizeof(cur));
         if (n == (int)sizeof(WRAPPER_TEXT) - 1 && !strcmp(cur, WRAPPER_TEXT)) return 0;
-    } else if (!is_file(WRAPPER_REAL)) {
+    } else if (stock_app_process(WRAPPER) || !is_file(WRAPPER_REAL)) {
+        /* Stock app_process is the real binary: .real is always copied fresh from it, so an old,
+         * empty or cut-off .real is never trusted. Another wrapper (HMG-API) with no .real yet
+         * becomes the next link, as in 1.17. */
         struct stat st;
-        if (stat(WRAPPER, &st) != 0 || copy_file(WRAPPER, WRAPPER_REAL, st.st_mode & 0777) != 0) {
+        snprintf(tmp, sizeof(tmp), "%s.nemesis-new", WRAPPER_REAL);
+        if (stat(WRAPPER, &st) != 0 || copy_file(WRAPPER, tmp, st.st_mode & 0777) != 0 ||
+            chown(tmp, 0, 2000) != 0 || fsync_path(tmp) != 0 || rename(tmp, WRAPPER_REAL) != 0 ||
+            fsync_path("/system/bin") != 0) {
             log_msg("livepatch: cannot keep %s errno=%d", WRAPPER_REAL, errno);
+            unlink(tmp);
             return -1;
         }
-        chown(WRAPPER_REAL, 0, 2000);
+    } else if (!stock_app_process(WRAPPER_REAL)) {
+        /* Neither is stock: the script would run something unknown. Leave app_process as it is. */
+        log_msg("livepatch: app_process and app_process.real are both modified, wrapper not installed");
+        return -1;
     }
     if (!is_file(WRAPPER_REAL)) return -1;
     snprintf(tmp, sizeof(tmp), "%s.nemesis-new", WRAPPER);
     if (write_file(tmp, WRAPPER_TEXT, 0755) != 0 || chmod(tmp, 0755) != 0 ||
-        chown(tmp, 0, 2000) != 0 || rename(tmp, WRAPPER) != 0) {
+        chown(tmp, 0, 2000) != 0 || fsync_path(tmp) != 0 || rename(tmp, WRAPPER) != 0) {
         log_msg("livepatch: wrapper write failed errno=%d", errno);
         unlink(tmp);
         return -1;
     }
+    fsync_path("/system/bin");
     log_msg("livepatch: wrapper installed");
     return 0;
 }
@@ -1807,7 +1828,7 @@ static void job_log(const char *id, char *out, size_t cap) {
 
 enum { MODE_INSTALL, MODE_UNINSTALL, MODE_REPAIR };
 
-/* Ports every target the job changes into work/<id>/, nothing mounted, before any hook.
+/* Ports every target the job changes into work/<id>/, nothing mounted, after preinstall/preuninstall.
  * Install: ini is the new package. Uninstall: ini NULL. Repair: every output rebuilt, no cache. */
 static int prepare(const char *id, const ini_file *ini, const char *name, const char *version, const char *stage, int mode) {
     static lp_row rows[LP_MAX];

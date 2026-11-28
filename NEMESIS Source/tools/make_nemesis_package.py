@@ -148,6 +148,9 @@ def validate(meta_path: Path) -> list[str]:
             errors.append(f"favicon file is missing: {fav}")
         elif img.stat().st_size > FAVICON_MAX:
             errors.append(f"favicon is {img.stat().st_size} bytes (max {FAVICON_MAX})")
+    # a fingerprint porter pack (porter pack --fp / convert): NEMESIS before 1.3 would take it and fail at the port
+    if any(meta_path.parent.rglob("delta/*.delta")) and not (VER_RE.match(ver) and tuple(map(int, ver.split("."))) >= (1, 3)):
+        errors.append("a fingerprint porter pack (delta/*.delta) needs version=1.3")
     if errors:
         raise SystemExit(f"{meta_path}: " + "; ".join(errors))
     return warnings
@@ -167,7 +170,8 @@ def main() -> None:
     out = args.output or (src.parent / f"{src.name}.zip")
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob("*")):
-            if p.is_file():
+            # native/ holds host-side sources for files/*.so; the unit has no compiler.
+            if p.is_file() and p.relative_to(src).parts[0] != "native":
                 z.write(p, p.relative_to(src).as_posix())
     print(f"Wrote {out} ({out.stat().st_size} bytes)")
 

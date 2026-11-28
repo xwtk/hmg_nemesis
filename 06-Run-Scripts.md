@@ -40,6 +40,8 @@ Anything else → “Invalid package descriptor”.
 
 **Android down.** The Handler acts only if the stick root also has a file named `NEMESIS.emergency`. Its contents do not matter. Without it, the stick waits until Android comes up and is then prompted as usual, so a stick left plugged in does not run again on the next boot. A recovery stick made for 1.15 needs this file added, or it does nothing on a unit whose Android will not start. `examples/usb-stick-recover-buildprop/` has it.
 
+With Android down, the HU does not mount USB sticks by itself. From 1.17.2, once Android has been down for about 20 seconds and its system service is not running, NEMESIS mounts the stick at `/storage/usb0` itself (FAT32, exFAT or NTFS, as the HU's own mounting does). If the USB port was left in device mode, which turns off USB power, NEMESIS first switches it back to host mode, unless a PC is connected over USB. A stick without `NEMESIS.emergency` is unmounted again right away. Leave the stick in for about a minute after the unit starts.
+
 `path` rules (rejected as invalid):
 
 - must not be empty for execute/install/update
